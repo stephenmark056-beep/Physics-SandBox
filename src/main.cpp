@@ -20,6 +20,9 @@ constexpr int kWindowHeight = 600;
 constexpr float kPixelsPerMeter = 30.0f;
 constexpr float kBoxHalfWidth = 60.0f / kPixelsPerMeter;
 constexpr float kBoxHalfHeight = 40.0f / kPixelsPerMeter;
+constexpr float kGroundWidth = kWindowWidth - 200.0f;
+constexpr float kGroundHalfWidth = kGroundWidth / (2.0f * kPixelsPerMeter);
+constexpr float kGroundHalfHeight = 15.0f / kPixelsPerMeter;
 constexpr float kTimeStep = 1.0f / 60.0f;
 
 }  // namespace
@@ -32,6 +35,13 @@ int main() {
         gfx::initDraw(kWindowWidth, kWindowHeight);
 
         b2World world({0.0f, -9.8f});
+
+        b2BodyDef groundBodyDef;
+        groundBodyDef.position.Set(kWindowWidth / (2.0f * kPixelsPerMeter), kGroundHalfHeight);
+        b2Body* groundBody = world.CreateBody(&groundBodyDef);
+        b2PolygonShape groundShape;
+        groundShape.SetAsBox(kGroundHalfWidth, kGroundHalfHeight);
+        groundBody->CreateFixture(&groundShape, 0.0f);
 
         b2BodyDef boxBodyDef;
         boxBodyDef.type = b2_dynamicBody;
@@ -81,6 +91,9 @@ int main() {
             }
 
             glClear(GL_COLOR_BUFFER_BIT);
+
+            gfx::drawBox(kWindowWidth / 2.0f, kWindowHeight - kGroundHalfHeight * kPixelsPerMeter,
+                         kGroundWidth, kGroundHalfHeight * 2.0f, 0.0f, 0.65f, 0.65f, 0.65f);
 
             if (boxBody != nullptr) {
                 const b2Vec2 position = boxBody->GetPosition();
