@@ -1,12 +1,12 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <box2d/box2d.h>
 
-#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <vector>
+
+#include <box2d/box2d.h>
 
 #include "core/glfw_context.h"
 #include "core/input.h"
@@ -17,76 +17,10 @@ namespace {
 
 constexpr int kWindowWidth = 800;
 constexpr int kWindowHeight = 600;
-
-constexpr float kPixelsPerMeter = 32.0f;
-constexpr float kGravity = 9.81f;
-
-constexpr float kGroundX = 12.5f;
-constexpr float kGroundY = 1.0f;
-constexpr float kGroundHalfWidth = 10.0f;
-constexpr float kGroundHalfHeight = 0.5f;
-
-constexpr float kSlideSpeed = 5.0f;
-
-constexpr float kStepDt = 1.0f / 60.0f;
-constexpr float kMaxFrameTime = 0.05f;
-constexpr int kVelocityIterations = 8;
-constexpr int kPositionIterations = 3;
-
-constexpr float kSpawnCooldown = 0.25f;
-constexpr float kSpawnHalfSize = 0.5f;
-constexpr float kRemoveBelowY = -10.0f;
-
-struct Box {
-    b2Body* body;
-    float halfWidth;
-    float halfHeight;
-    float r, g, b;
-};
-
-float metersToPixelsX(float xMeters) {
-    return xMeters * kPixelsPerMeter;
-}
-
-float metersToPixelsY(float yMeters) {
-    return kWindowHeight - yMeters * kPixelsPerMeter;
-}
-
-float pixelsToMetersX(float xPixels) {
-    return xPixels / kPixelsPerMeter;
-}
-
-float pixelsToMetersY(float yPixels) {
-    return (kWindowHeight - yPixels) / kPixelsPerMeter;
-}
-
-void drawBoxBody(const b2Body* body, float halfWidth, float halfHeight, float r, float g,
-                 float b) {
-    b2Vec2 position = body->GetPosition();
-    gfx::drawBox(metersToPixelsX(position.x), metersToPixelsY(position.y),
-                 halfWidth * 2.0f * kPixelsPerMeter, halfHeight * 2.0f * kPixelsPerMeter,
-                 -body->GetAngle(), r, g, b);
-}
-
-Box createBox(b2World& world, float x, float y, float halfWidth, float halfHeight, float friction,
-              float restitution, float r, float g, float b) {
-    b2BodyDef bodyDef;
-    bodyDef.type = b2_dynamicBody;
-    bodyDef.position.Set(x, y);
-    b2Body* body = world.CreateBody(&bodyDef);
-
-    b2PolygonShape shape;
-    shape.SetAsBox(halfWidth, halfHeight);
-
-    b2FixtureDef fixtureDef;
-    fixtureDef.shape = &shape;
-    fixtureDef.density = 1.0f;
-    fixtureDef.friction = friction;
-    fixtureDef.restitution = restitution;
-    body->CreateFixture(&fixtureDef);
-
-    return {body, halfWidth, halfHeight, r, g, b};
-}
+constexpr float kPixelsPerMeter = 30.0f;
+constexpr float kBoxHalfWidth = 60.0f / kPixelsPerMeter;
+constexpr float kBoxHalfHeight = 40.0f / kPixelsPerMeter;
+constexpr float kTimeStep = 1.0f / 60.0f;
 
 }  // namespace
 
@@ -97,77 +31,62 @@ int main() {
         gfx::Window window({.width = kWindowWidth, .height = kWindowHeight, .title = "Box2D"});
         gfx::initDraw(kWindowWidth, kWindowHeight);
 
-        b2World world(b2Vec2(0.0f, -kGravity));
+        b2World world({0.0f, -9.8f});
 
-        b2BodyDef groundDef;
-        groundDef.position.Set(kGroundX, kGroundY);
-        b2Body* ground = world.CreateBody(&groundDef);
-
-        b2PolygonShape groundShape;
-        groundShape.SetAsBox(kGroundHalfWidth, kGroundHalfHeight);
-
-        b2FixtureDef groundFixture;
-        groundFixture.shape = &groundShape;
-        groundFixture.friction = 0.6f;
-        ground->CreateFixture(&groundFixture);
-
-        std::vector<Box> boxes;
-        boxes.push_back(createBox(world, 4.0f, 3.0f, 0.5f, 0.5f, 0.9f, 0.0f, 0.9f, 0.3f, 0.3f));
-        boxes.push_back(createBox(world, 7.0f, 3.0f, 1.0f, 0.5f, 0.05f, 0.0f, 0.3f, 0.5f, 0.9f));
-        boxes.push_back(createBox(world, pixelsToMetersX(448.0f), pixelsToMetersY(152.0f), 0.75f,
-                                  0.75f, 0.5f, 0.8f, 0.3f, 0.8f, 0.4f));
-        boxes.push_back(createBox(world, 18.0f, 10.0f, 0.5f, 1.0f, 0.5f, 0.4f, 0.9f, 0.8f, 0.3f));
-        boxes[0].body->SetLinearVelocity(b2Vec2(kSlideSpeed, 0.0f));
-        boxes[1].body->SetLinearVelocity(b2Vec2(kSlideSpeed, 0.0f));
-        boxes[3].body->SetTransform(b2Vec2(18.0f, 10.0f), 0.4f);
+        b2BodyDef boxBodyDef;
+        boxBodyDef.type = b2_dynamicBody;
+        boxBodyDef.position.Set(kWindowWidth / (2.0f * kPixelsPerMeter),
+                                (kWindowHeight - 100.0f) / kPixelsPerMeter);
+        b2Body* boxBody = world.CreateBody(&boxBodyDef);
+        b2PolygonShape boxShape;
+        boxShape.SetAsBox(kBoxHalfWidth, kBoxHalfHeight);
+        boxBody->CreateFixture(&boxShape, 1.0f);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
-        float spawnTimer = 0.0f;
-
         double previousTime = glfwGetTime();
         float accumulator = 0.0f;
+        bool wasMouseDown = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
 
-            double now = glfwGetTime();
-            float frameTime = std::min(static_cast<float>(now - previousTime), kMaxFrameTime);
-            previousTime = now;
-
             double mouseX = 0.0, mouseY = 0.0;
             window.getCursorPosition(mouseX, mouseY);
-            bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
-
-            spawnTimer -= frameTime;
-            if (mouseDown && spawnTimer <= 0.0f) {
-                boxes.push_back(createBox(world, pixelsToMetersX(static_cast<float>(mouseX)),
-                                          pixelsToMetersY(static_cast<float>(mouseY)),
-                                          kSpawnHalfSize, kSpawnHalfSize, 0.5f, 0.3f, 1.0f, 0.5f,
-                                          0.2f));
-                spawnTimer = kSpawnCooldown;
+            const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+            if (mouseDown && !wasMouseDown) {
+                std::cout << "click at " << mouseX << ", " << mouseY << '\n';
             }
+            wasMouseDown = mouseDown;
 
-            accumulator += frameTime;
-            while (accumulator >= kStepDt) {
-                world.Step(kStepDt, kVelocityIterations, kPositionIterations);
-                accumulator -= kStepDt;
-            }
+            const double currentTime = glfwGetTime();
+            const float frameTime = static_cast<float>(currentTime - previousTime);
+            previousTime = currentTime;
+            accumulator += frameTime < 0.25f ? frameTime : 0.25f;
 
-            for (auto it = boxes.begin(); it != boxes.end();) {
-                if (it->body->GetPosition().y < kRemoveBelowY) {
-                    world.DestroyBody(it->body);
-                    it = boxes.erase(it);
-                } else {
-                    ++it;
+            while (accumulator >= kTimeStep) {
+                world.Step(kTimeStep, 8, 3);
+                if (boxBody != nullptr) {
+                    const b2Vec2 position = boxBody->GetPosition();
+                    const float angle = boxBody->GetAngle();
+                    const float verticalExtent =
+                        std::abs(std::sin(angle)) * kBoxHalfWidth +
+                        std::abs(std::cos(angle)) * kBoxHalfHeight;
+                    if (position.y < -verticalExtent) {
+                        world.DestroyBody(boxBody);
+                        boxBody = nullptr;
+                    }
                 }
+                accumulator -= kTimeStep;
             }
 
             glClear(GL_COLOR_BUFFER_BIT);
 
-            drawBoxBody(ground, kGroundHalfWidth, kGroundHalfHeight, 0.35f, 0.35f, 0.4f);
-            for (const Box& box : boxes) {
-                drawBoxBody(box.body, box.halfWidth, box.halfHeight, box.r, box.g, box.b);
+            if (boxBody != nullptr) {
+                const b2Vec2 position = boxBody->GetPosition();
+                gfx::drawBox(position.x * kPixelsPerMeter,
+                             kWindowHeight - position.y * kPixelsPerMeter, 120.0f, 80.0f,
+                             -boxBody->GetAngle(), 1.0f, 0.5f, 0.2f);
             }
 
             window.swapBuffers();

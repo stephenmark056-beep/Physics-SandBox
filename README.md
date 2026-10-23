@@ -1,12 +1,12 @@
-# Physics Sandbox
+# Box2D Starter
 
-A 2D physics demo in C++ and OpenGL, built on Box2D. Four boxes with different
-materials slide, tumble and settle on a static ground, and holding the left
-mouse button spawns more. `src/main.cpp` is built up one checkpoint at a time,
-so each commit in the history adds one concept.
+A C++20 and OpenGL starter for Box2D projects on Windows. It opens an 800x600
+window with an orange box that falls under gravity and lands on a static floor.
+The mouse is polled each frame and a left click prints its position to the
+console. Box2D v2.4.2 is vendored and built into a static library.
 
-GLFW, GLAD and Box2D are vendored, and window and input handling live in
-`src/core/`. Nothing needs to be installed beyond the compiler.
+GLFW, GLAD and Box2D are vendored, so nothing needs to be installed beyond the
+compiler.
 
 ## Prerequisites
 
@@ -24,33 +24,7 @@ GLFW, GLAD and Box2D are vendored, and window and input handling live in
 2. Run the `Build Main` task (`Ctrl+Shift+B`). The first build also compiles
    Box2D into `lib/libbox2d.a`, which takes about 40 seconds. Later builds
    skip that step.
-3. Run `main.exe` from the repo folder.
-
-## Controls
-
-- **Spawn:** hold the left mouse button. A box appears at the cursor, at most
-  one every quarter second.
-- `Esc` closes the window.
-
-## How it works
-
-The window is 800x600 pixels with the origin at the top left and y pointing
-down. Box2D works in meters with y pointing up, and 32 pixels make one meter
-(`kPixelsPerMeter`). The world origin is the bottom left corner of the window.
-
-The simulation runs at a fixed 60 Hz, driven by a time accumulator. A frame
-longer than `kMaxFrameTime` is clamped, so a stall can never trigger a long
-burst of steps.
-
-Box2D positions are body centers and `SetAsBox` takes half extents.
-`drawBoxBody` converts both to pixels and negates the angle, because rotation
-counter-clockwise in Box2D is clockwise on a y-down screen.
-
-Each box has its own density, friction and restitution. Bodies that fall below
-`kRemoveBelowY` meters are destroyed.
-
-The values to tune are the constants at the top of `src/main.cpp`:
-`kGravity`, `kPixelsPerMeter`, `kStepDt`, `kSpawnCooldown` and `kSpawnHalfSize`.
+3. Run `main.exe` from the repo folder. Press `Esc` to close it.
 
 ## Rebuild the Box2D library
 
@@ -66,7 +40,7 @@ rebuild it after switching compilers or editing `src/box2d/`, run the
 glfw3.dll                 GLFW runtime, must sit next to main.exe
 lib/libglfw3dll.a         GLFW import library
 src/
-  main.cpp                world, bodies, spawning, main loop
+  main.cpp                window, Box2D world and falling rectangle
   draw.h/.cpp             gfx::drawBox and shader setup
   glad.c                  vendored GLAD loader
   core/                   GLFW context, window and keyboard input (gfx namespace)
@@ -77,14 +51,6 @@ include/
 scripts/
   build_box2d.bat         compiles src/box2d into lib/libbox2d.a
 ```
-
-`gfx::drawBox(x, y, width, height, angleRadians, r, g, b)` draws a filled
-rectangle. `x` and `y` are the center in pixels, and a positive angle turns the
-box clockwise on screen.
-
-Everything in `core/` lives in the `gfx` namespace and uses RAII: an object
-acquires its resource in its constructor and releases it in its destructor.
-Startup failures throw `std::runtime_error`, which `main` catches and prints.
 
 ## Troubleshooting
 
