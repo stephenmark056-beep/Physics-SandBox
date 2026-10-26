@@ -19,21 +19,30 @@ namespace {
 
 constexpr int kWindowWidth = 800;
 constexpr int kWindowHeight = 600;
-constexpr float kPixelsPerMeter = 30.0f;
+constexpr float kPixelsPerMeter = 32.0f;
+
+constexpr float pixelsToMeters(float pixels) {
+    return pixels / kPixelsPerMeter;
+}
+
+constexpr float metersToPixels(float meters) {
+    return meters * kPixelsPerMeter;
+}
+
 // Decided to minimize the size of the box so that there will be more space for me to spam this
-constexpr float kBoxHalfWidth = 30.0f / kPixelsPerMeter;
-constexpr float kBoxHalfHeight = 20.0f / kPixelsPerMeter;
+constexpr float kBoxHalfWidth = pixelsToMeters(30.0f);
+constexpr float kBoxHalfHeight = pixelsToMeters(20.0f);
 constexpr float kGroundWidth = kWindowWidth - 200.0f;
-constexpr float kGroundHalfWidth = kGroundWidth / (2.0f * kPixelsPerMeter);
-constexpr float kGroundHalfHeight = 15.0f / kPixelsPerMeter;
+constexpr float kGroundHalfWidth = pixelsToMeters(kGroundWidth / 2.0f);
+constexpr float kGroundHalfHeight = pixelsToMeters(15.0f);
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kTimeStep = 1.0f / 60.0f;
 
 b2Body* createDynamicBox(b2World& world, float screenX, float screenY) {
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;
-    bodyDef.position.Set(screenX / kPixelsPerMeter,
-                         (kWindowHeight - screenY) / kPixelsPerMeter);
+    bodyDef.position.Set(pixelsToMeters(screenX),
+                         pixelsToMeters(kWindowHeight - screenY));
     b2Body* body = world.CreateBody(&bodyDef);
 
     b2PolygonShape shape;
@@ -54,7 +63,7 @@ int main() {
         b2World world({0.0f, -9.8f});
 
         b2BodyDef groundBodyDef;
-        groundBodyDef.position.Set(kWindowWidth / (2.0f * kPixelsPerMeter), kGroundHalfHeight);
+        groundBodyDef.position.Set(pixelsToMeters(kWindowWidth / 2.0f), kGroundHalfHeight);
         b2Body* groundBody = world.CreateBody(&groundBodyDef);
         b2PolygonShape groundShape;
         groundShape.SetAsBox(kGroundHalfWidth, kGroundHalfHeight);
@@ -107,15 +116,15 @@ int main() {
 
             glClear(GL_COLOR_BUFFER_BIT);
 
-            gfx::drawBox(kWindowWidth / 2.0f, kWindowHeight - kGroundHalfHeight * kPixelsPerMeter,
+            gfx::drawBox(kWindowWidth / 2.0f, kWindowHeight - metersToPixels(kGroundHalfHeight),
                          kGroundWidth, kGroundHalfHeight * 2.0f, 0.0f, 0.65f, 0.65f, 0.65f);
 
             for (const b2Body* box : boxes) {
                 const b2Vec2 position = box->GetPosition();
-                gfx::drawBox(position.x * kPixelsPerMeter,
-                             kWindowHeight - position.y * kPixelsPerMeter,
-                             kBoxHalfWidth * 2.0f * kPixelsPerMeter,
-                             kBoxHalfHeight * 2.0f * kPixelsPerMeter, -box->GetAngle(), 1.0f,
+                gfx::drawBox(metersToPixels(position.x),
+                             kWindowHeight - metersToPixels(position.y),
+                             metersToPixels(kBoxHalfWidth * 2.0f),
+                             metersToPixels(kBoxHalfHeight * 2.0f), -box->GetAngle(), 1.0f,
                              0.5f, 0.2f);
             }
 
