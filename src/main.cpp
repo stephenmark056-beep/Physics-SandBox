@@ -1,6 +1,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
@@ -19,12 +20,13 @@ namespace {
 constexpr int kWindowWidth = 800;
 constexpr int kWindowHeight = 600;
 constexpr float kPixelsPerMeter = 30.0f;
-constexpr float kBoxHalfWidth = 60.0f / kPixelsPerMeter;
-constexpr float kBoxHalfHeight = 40.0f / kPixelsPerMeter;
+// Decided to minimize the size of the box so that there will be more space for me to spam this
+constexpr float kBoxHalfWidth = 30.0f / kPixelsPerMeter;
+constexpr float kBoxHalfHeight = 20.0f / kPixelsPerMeter;
 constexpr float kGroundWidth = kWindowWidth - 200.0f;
 constexpr float kGroundHalfWidth = kGroundWidth / (2.0f * kPixelsPerMeter);
 constexpr float kGroundHalfHeight = 15.0f / kPixelsPerMeter;
-constexpr float kTimeStep = 1.0f / 60.0f;
+constexpr float kMaxFrameTime = 1.0f / 30.0f;
 
 b2Body* createDynamicBox(b2World& world, float screenX, float screenY) {
     b2BodyDef bodyDef;
@@ -63,7 +65,6 @@ int main() {
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
         double previousTime = glfwGetTime();
-        float accumulator = 0.0f;
         bool wasMouseDown = false;
 
         while (!window.shouldClose()) {
@@ -80,25 +81,22 @@ int main() {
             wasMouseDown = mouseDown;
 
             const double currentTime = glfwGetTime();
-            const float frameTime = static_cast<float>(currentTime - previousTime);
+            const float frameTime = std::min(static_cast<float>(currentTime - previousTime),
+                                              kMaxFrameTime);
             previousTime = currentTime;
-            accumulator += frameTime < 0.25f ? frameTime : 0.25f;
 
-            while (accumulator >= kTimeStep) {
-                world.Step(kTimeStep, 8, 3);
-                for (auto box = boxes.begin(); box != boxes.end();) {
-                    const b2Vec2 position = (*box)->GetPosition();
-                    const float angle = (*box)->GetAngle();
-                    const float verticalExtent = std::abs(std::sin(angle)) * kBoxHalfWidth +
-                                                 std::abs(std::cos(angle)) * kBoxHalfHeight;
-                    if (position.y < -verticalExtent) {
-                        world.DestroyBody(*box);
-                        box = boxes.erase(box);
-                    } else {
-                        ++box;
-                    }
+            world.Step(frameTime, 8, 3);
+            for (auto box = boxes.begin(); box != boxes.end();) {
+                const b2Vec2 position = (*box)->GetPosition();
+                const float angle = (*box)->GetAngle();
+                const float verticalExtent = std::abs(std::sin(angle)) * kBoxHalfWidth +
+                                             std::abs(std::cos(angle)) * kBoxHalfHeight;
+                if (position.y < -verticalExtent) {
+                    world.DestroyBody(*box);
+                    box = boxes.erase(box);
+                } else {
+                    ++box;
                 }
-                accumulator -= kTimeStep;
             }
 
             glClear(GL_COLOR_BUFFER_BIT);
@@ -109,8 +107,10 @@ int main() {
             for (const b2Body* box : boxes) {
                 const b2Vec2 position = box->GetPosition();
                 gfx::drawBox(position.x * kPixelsPerMeter,
-                             kWindowHeight - position.y * kPixelsPerMeter, 120.0f, 80.0f,
-                             -box->GetAngle(), 1.0f, 0.5f, 0.2f);
+                             kWindowHeight - position.y * kPixelsPerMeter,
+                             kBoxHalfWidth * 2.0f * kPixelsPerMeter,
+                             kBoxHalfHeight * 2.0f * kPixelsPerMeter, -box->GetAngle(), 1.0f,
+                             0.5f, 0.2f);
             }
 
             window.swapBuffers();
