@@ -116,16 +116,10 @@ int main() {
 
             glClear(GL_COLOR_BUFFER_BIT);
 
-            gfx::drawBox(kWindowWidth / 2.0f, kWindowHeight - metersToPixels(kGroundHalfHeight),
-                         kGroundWidth, kGroundHalfHeight * 2.0f, 0.0f, 0.65f, 0.65f, 0.65f);
+            gfx::drawBoxBody(*groundBody, kPixelsPerMeter, kWindowHeight, 0.65f, 0.65f, 0.65f);
 
             for (const b2Body* box : boxes) {
-                const b2Vec2 position = box->GetPosition();
-                gfx::drawBox(metersToPixels(position.x),
-                             kWindowHeight - metersToPixels(position.y),
-                             metersToPixels(kBoxHalfWidth * 2.0f),
-                             metersToPixels(kBoxHalfHeight * 2.0f), -box->GetAngle(), 1.0f,
-                             0.5f, 0.2f);
+                gfx::drawBoxBody(*box, kPixelsPerMeter, kWindowHeight, 1.0f, 0.5f, 0.2f);
             }
 
             window.swapBuffers();
