@@ -31,6 +31,7 @@ constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
 constexpr float kSlideSpeed = 5.0f;
+constexpr float kSpawnInterval = 0.25f;
 
 struct Box {
     b2Body* body;
@@ -95,30 +96,43 @@ int main() {
 
         double previousTime = glfwGetTime();
         float accumulator = 0.0f;
+        float spawnTimer = 0.0f;
         bool wasMouseDown = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
 
-            double mouseX = 0.0, mouseY = 0.0;
-            window.getCursorPosition(mouseX, mouseY);
-            const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
-            if (mouseDown && !wasMouseDown) {
-                std::cout << "click at " << mouseX << ", " << mouseY << '\n';
-                boxes.push_back(createBox(
-                    world, b2_dynamicBody,
-                    {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
-                     gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
-                                          kPixelsPerMeter)},
-                    {kBoxHalfWidth, kBoxHalfHeight}, 1.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
-            }
-            wasMouseDown = mouseDown;
-
             const double currentTime = glfwGetTime();
             const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
-
             const float frameTime = std::min(elapsedTime, kMaxFrameTime);
+
+            double mouseX = 0.0, mouseY = 0.0;
+            window.getCursorPosition(mouseX, mouseY);
+            const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+            if (mouseDown) {
+                const auto spawnBoxAtCursor = [&]() {
+                    boxes.push_back(createBox(
+                        world, b2_dynamicBody,
+                        {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
+                         gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
+                                              kPixelsPerMeter)},
+                        {kBoxHalfWidth, kBoxHalfHeight}, 1.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+                };
+
+                if (!wasMouseDown) {
+                    spawnBoxAtCursor();
+                }
+                spawnTimer += frameTime;
+                while (spawnTimer >= kSpawnInterval) {
+                    spawnBoxAtCursor();
+                    spawnTimer -= kSpawnInterval;
+                }
+            } else {
+                spawnTimer = 0.0f;
+            }
+            wasMouseDown = mouseDown;
+
             accumulator += frameTime;
             while (accumulator >= kStepDt) {
                 world.Step(kStepDt, 8, 3);
