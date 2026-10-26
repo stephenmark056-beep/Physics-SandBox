@@ -38,16 +38,20 @@ constexpr float kGroundHalfHeight = pixelsToMeters(15.0f);
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kTimeStep = 1.0f / 60.0f;
 
-b2Body* createDynamicBox(b2World& world, float screenX, float screenY) {
+b2Body* createBox(b2World& world, b2BodyType type, const b2Vec2& position,
+                  const b2Vec2& halfExtents, float density) {
     b2BodyDef bodyDef;
-    bodyDef.type = b2_dynamicBody;
-    bodyDef.position.Set(pixelsToMeters(screenX),
-                         pixelsToMeters(kWindowHeight - screenY));
+    bodyDef.type = type;
+    bodyDef.position = position;
     b2Body* body = world.CreateBody(&bodyDef);
 
     b2PolygonShape shape;
-    shape.SetAsBox(kBoxHalfWidth, kBoxHalfHeight);
-    body->CreateFixture(&shape, 1.0f);
+    shape.SetAsBox(halfExtents.x, halfExtents.y);
+
+    b2FixtureDef fixtureDef;
+    fixtureDef.shape = &shape;
+    fixtureDef.density = density;
+    body->CreateFixture(&fixtureDef);
     return body;
 }
 
@@ -62,15 +66,15 @@ int main() {
 
         b2World world({0.0f, -9.8f});
 
-        b2BodyDef groundBodyDef;
-        groundBodyDef.position.Set(pixelsToMeters(kWindowWidth / 2.0f), kGroundHalfHeight);
-        b2Body* groundBody = world.CreateBody(&groundBodyDef);
-        b2PolygonShape groundShape;
-        groundShape.SetAsBox(kGroundHalfWidth, kGroundHalfHeight);
-        groundBody->CreateFixture(&groundShape, 0.0f);
+        b2Body* groundBody = createBox(
+            world, b2_staticBody, {pixelsToMeters(kWindowWidth / 2.0f), kGroundHalfHeight},
+            {kGroundHalfWidth, kGroundHalfHeight}, 0.0f);
 
         std::vector<b2Body*> boxes;
-        boxes.push_back(createDynamicBox(world, kWindowWidth / 2.0f, 100.0f));
+        boxes.push_back(createBox(world, b2_dynamicBody,
+                                  {pixelsToMeters(kWindowWidth / 2.0f),
+                                   pixelsToMeters(kWindowHeight - 100.0f)},
+                                  {kBoxHalfWidth, kBoxHalfHeight}, 1.0f));
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
@@ -86,8 +90,11 @@ int main() {
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             if (mouseDown && !wasMouseDown) {
                 std::cout << "click at " << mouseX << ", " << mouseY << '\n';
-                boxes.push_back(createDynamicBox(world, static_cast<float>(mouseX),
-                                                 static_cast<float>(mouseY)));
+                boxes.push_back(createBox(
+                    world, b2_dynamicBody,
+                    {pixelsToMeters(static_cast<float>(mouseX)),
+                     pixelsToMeters(kWindowHeight - static_cast<float>(mouseY))},
+                    {kBoxHalfWidth, kBoxHalfHeight}, 1.0f));
             }
             wasMouseDown = mouseDown;
 
