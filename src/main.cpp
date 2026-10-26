@@ -28,6 +28,7 @@ constexpr float kBoxHalfHeight = gfx::pixelsToMeters(20.0f, kPixelsPerMeter);
 constexpr float kGroundWidth = kWindowWidth - 200.0f;
 constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPixelsPerMeter);
 constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
+constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
 constexpr float kSlideSpeed = 5.0f;
@@ -117,7 +118,7 @@ int main() {
                         {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
                          gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
                                               kPixelsPerMeter)},
-                        {kBoxHalfWidth, kBoxHalfHeight}, 4.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+                        {kBoxHalfWidth, kBoxHalfHeight}, 1.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
                 };
 
                 if (!wasMouseDown) {
@@ -143,7 +144,7 @@ int main() {
                 const float angle = box->body->GetAngle();
                 const float verticalExtent = std::abs(std::sin(angle)) * box->halfExtents.x +
                                              std::abs(std::cos(angle)) * box->halfExtents.y;
-                if (position.y < -verticalExtent) {
+                if (position.y - verticalExtent < kRemoveBelowY) {
                     world.DestroyBody(box->body);
                     box = boxes.erase(box);
                 } else {
