@@ -30,12 +30,25 @@ constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPix
 constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
+constexpr float kSlideSpeed = 5.0f;
 
-b2Body* createBox(b2World& world, b2BodyType type, const b2Vec2& position,
-                  const b2Vec2& halfExtents, float density) {
+struct Box {
+    b2Body* body;
+    b2Vec2 halfExtents;
+    float friction;
+    float restitution;
+    float r;
+    float g;
+    float b;
+};
+
+Box createBox(b2World& world, b2BodyType type, const b2Vec2& position,
+              const b2Vec2& halfExtents, float density, float friction, float restitution,
+              float r, float g, float b, float angle = 0.0f) {
     b2BodyDef bodyDef;
     bodyDef.type = type;
     bodyDef.position = position;
+    bodyDef.angle = angle;
     b2Body* body = world.CreateBody(&bodyDef);
 
     b2PolygonShape shape;
@@ -44,8 +57,10 @@ b2Body* createBox(b2World& world, b2BodyType type, const b2Vec2& position,
     b2FixtureDef fixtureDef;
     fixtureDef.shape = &shape;
     fixtureDef.density = density;
+    fixtureDef.friction = friction;
+    fixtureDef.restitution = restitution;
     body->CreateFixture(&fixtureDef);
-    return body;
+    return {body, halfExtents, friction, restitution, r, g, b};
 }
 
 }  // namespace
@@ -59,17 +74,22 @@ int main() {
 
         b2World world({0.0f, -9.8f});
 
-        b2Body* groundBody = createBox(
+        const Box ground = createBox(
             world, b2_staticBody,
             {gfx::pixelsToMeters(kWindowWidth / 2.0f, kPixelsPerMeter), kGroundHalfHeight},
-            {kGroundHalfWidth, kGroundHalfHeight}, 0.0f);
+            {kGroundHalfWidth, kGroundHalfHeight}, 0.0f, 0.6f, 0.0f, 0.65f, 0.65f, 0.65f);
 
-        std::vector<b2Body*> boxes;
-        boxes.push_back(createBox(world, b2_dynamicBody,
-                                  {gfx::pixelsToMeters(kWindowWidth / 2.0f, kPixelsPerMeter),
-                                   gfx::pixelsToMetersY(100.0f, kWindowHeight,
-                                                        kPixelsPerMeter)},
-                                  {kBoxHalfWidth, kBoxHalfHeight}, 1.0f));
+        std::vector<Box> boxes;
+        boxes.push_back(createBox(world, b2_dynamicBody, {4.0f, kGroundHalfHeight * 2.0f + 0.5f},
+                                  {0.5f, 0.5f}, 1.0f, 0.9f, 0.0f, 0.9f, 0.3f, 0.3f));
+        boxes.push_back(createBox(world, b2_dynamicBody, {7.0f, kGroundHalfHeight * 2.0f + 0.5f},
+                                  {1.0f, 0.5f}, 1.0f, 0.05f, 0.0f, 0.3f, 0.5f, 0.9f));
+        boxes.push_back(createBox(world, b2_dynamicBody, {14.0f, 5.0f}, {0.75f, 0.75f}, 1.0f,
+                                  0.5f, 0.8f, 0.3f, 0.8f, 0.4f));
+        boxes.push_back(createBox(world, b2_dynamicBody, {18.0f, 8.0f}, {0.5f, 1.0f}, 1.0f,
+                                  0.5f, 0.4f, 0.9f, 0.8f, 0.3f, 0.4f));
+        boxes[0].body->SetLinearVelocity({kSlideSpeed, 0.0f});
+        boxes[1].body->SetLinearVelocity({kSlideSpeed, 0.0f});
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
@@ -90,7 +110,7 @@ int main() {
                     {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
                      gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
                                           kPixelsPerMeter)},
-                    {kBoxHalfWidth, kBoxHalfHeight}, 1.0f));
+                    {kBoxHalfWidth, kBoxHalfHeight}, 1.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
             }
             wasMouseDown = mouseDown;
 
@@ -105,12 +125,12 @@ int main() {
                 accumulator -= kStepDt;
             }
             for (auto box = boxes.begin(); box != boxes.end();) {
-                const b2Vec2 position = (*box)->GetPosition();
-                const float angle = (*box)->GetAngle();
-                const float verticalExtent = std::abs(std::sin(angle)) * kBoxHalfWidth +
-                                             std::abs(std::cos(angle)) * kBoxHalfHeight;
+                const b2Vec2 position = box->body->GetPosition();
+                const float angle = box->body->GetAngle();
+                const float verticalExtent = std::abs(std::sin(angle)) * box->halfExtents.x +
+                                             std::abs(std::cos(angle)) * box->halfExtents.y;
                 if (position.y < -verticalExtent) {
-                    world.DestroyBody(*box);
+                    world.DestroyBody(box->body);
                     box = boxes.erase(box);
                 } else {
                     ++box;
@@ -119,10 +139,11 @@ int main() {
 
             glClear(GL_COLOR_BUFFER_BIT);
 
-            gfx::drawBoxBody(*groundBody, kPixelsPerMeter, kWindowHeight, 0.65f, 0.65f, 0.65f);
+            gfx::drawBoxBody(*ground.body, kPixelsPerMeter, kWindowHeight, ground.r, ground.g,
+                             ground.b);
 
-            for (const b2Body* box : boxes) {
-                gfx::drawBoxBody(*box, kPixelsPerMeter, kWindowHeight, 1.0f, 0.5f, 0.2f);
+            for (const Box& box : boxes) {
+                gfx::drawBoxBody(*box.body, kPixelsPerMeter, kWindowHeight, box.r, box.g, box.b);
             }
 
             window.swapBuffers();
