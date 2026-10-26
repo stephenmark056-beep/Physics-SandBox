@@ -27,6 +27,7 @@ constexpr float kGroundWidth = kWindowWidth - 200.0f;
 constexpr float kGroundHalfWidth = kGroundWidth / (2.0f * kPixelsPerMeter);
 constexpr float kGroundHalfHeight = 15.0f / kPixelsPerMeter;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
+constexpr float kTimeStep = 1.0f / 60.0f;
 
 b2Body* createDynamicBox(b2World& world, float screenX, float screenY) {
     b2BodyDef bodyDef;
@@ -65,6 +66,7 @@ int main() {
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
         double previousTime = glfwGetTime();
+        float accumulator = 0.0f;
         bool wasMouseDown = false;
 
         while (!window.shouldClose()) {
@@ -85,7 +87,11 @@ int main() {
                                               kMaxFrameTime);
             previousTime = currentTime;
 
-            world.Step(frameTime, 8, 3);
+            accumulator += frameTime;
+            while (accumulator >= kTimeStep) {
+                world.Step(kTimeStep, 8, 3);
+                accumulator -= kTimeStep;
+            }
             for (auto box = boxes.begin(); box != boxes.end();) {
                 const b2Vec2 position = (*box)->GetPosition();
                 const float angle = (*box)->GetAngle();
