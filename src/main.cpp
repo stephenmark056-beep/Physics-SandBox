@@ -118,7 +118,7 @@ int main() {
                         {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
                          gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
                                               kPixelsPerMeter)},
-                        {kBoxHalfWidth, kBoxHalfHeight}, 1.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+                        {kBoxHalfWidth, kBoxHalfHeight}, 4.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
                 };
 
                 if (!wasMouseDown) {
