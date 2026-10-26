@@ -1,5 +1,7 @@
 #include "draw.h"
 
+#include "core/coordinates.h"
+
 #include <glad/glad.h>
 
 #include <algorithm>
@@ -152,9 +154,10 @@ void drawBoxBody(const b2Body& body, float pixelsPerMeter, float screenHeight, f
     }
 
     const b2Vec2 center = body.GetWorldPoint({(minX + maxX) * 0.5f, (minY + maxY) * 0.5f});
-    drawBox(center.x * pixelsPerMeter, screenHeight - center.y * pixelsPerMeter,
-            (maxX - minX) * pixelsPerMeter, (maxY - minY) * pixelsPerMeter, -body.GetAngle(), r,
-            g, b);
+    drawBox(metersToPixels(center.x, pixelsPerMeter),
+            metersToPixelsY(center.y, screenHeight, pixelsPerMeter),
+            metersToPixels(maxX - minX, pixelsPerMeter),
+            metersToPixels(maxY - minY, pixelsPerMeter), -body.GetAngle(), r, g, b);
 }
 
 }  // namespace gfx

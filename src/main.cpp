@@ -11,6 +11,7 @@
 #include <box2d/box2d.h>
 
 #include "core/glfw_context.h"
+#include "core/coordinates.h"
 #include "core/input.h"
 #include "core/window.h"
 #include "draw.h"
@@ -21,20 +22,12 @@ constexpr int kWindowWidth = 800;
 constexpr int kWindowHeight = 600;
 constexpr float kPixelsPerMeter = 32.0f;
 
-constexpr float pixelsToMeters(float pixels) {
-    return pixels / kPixelsPerMeter;
-}
-
-constexpr float metersToPixels(float meters) {
-    return meters * kPixelsPerMeter;
-}
-
 // Decided to minimize the size of the box so that there will be more space for me to spam this
-constexpr float kBoxHalfWidth = pixelsToMeters(30.0f);
-constexpr float kBoxHalfHeight = pixelsToMeters(20.0f);
+constexpr float kBoxHalfWidth = gfx::pixelsToMeters(30.0f, kPixelsPerMeter);
+constexpr float kBoxHalfHeight = gfx::pixelsToMeters(20.0f, kPixelsPerMeter);
 constexpr float kGroundWidth = kWindowWidth - 200.0f;
-constexpr float kGroundHalfWidth = pixelsToMeters(kGroundWidth / 2.0f);
-constexpr float kGroundHalfHeight = pixelsToMeters(15.0f);
+constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPixelsPerMeter);
+constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kTimeStep = 1.0f / 60.0f;
 
@@ -67,13 +60,15 @@ int main() {
         b2World world({0.0f, -9.8f});
 
         b2Body* groundBody = createBox(
-            world, b2_staticBody, {pixelsToMeters(kWindowWidth / 2.0f), kGroundHalfHeight},
+            world, b2_staticBody,
+            {gfx::pixelsToMeters(kWindowWidth / 2.0f, kPixelsPerMeter), kGroundHalfHeight},
             {kGroundHalfWidth, kGroundHalfHeight}, 0.0f);
 
         std::vector<b2Body*> boxes;
         boxes.push_back(createBox(world, b2_dynamicBody,
-                                  {pixelsToMeters(kWindowWidth / 2.0f),
-                                   pixelsToMeters(kWindowHeight - 100.0f)},
+                                  {gfx::pixelsToMeters(kWindowWidth / 2.0f, kPixelsPerMeter),
+                                   gfx::pixelsToMetersY(100.0f, kWindowHeight,
+                                                        kPixelsPerMeter)},
                                   {kBoxHalfWidth, kBoxHalfHeight}, 1.0f));
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -92,8 +87,9 @@ int main() {
                 std::cout << "click at " << mouseX << ", " << mouseY << '\n';
                 boxes.push_back(createBox(
                     world, b2_dynamicBody,
-                    {pixelsToMeters(static_cast<float>(mouseX)),
-                     pixelsToMeters(kWindowHeight - static_cast<float>(mouseY))},
+                    {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
+                     gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
+                                          kPixelsPerMeter)},
                     {kBoxHalfWidth, kBoxHalfHeight}, 1.0f));
             }
             wasMouseDown = mouseDown;
