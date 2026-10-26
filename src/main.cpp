@@ -29,7 +29,7 @@ constexpr float kGroundWidth = kWindowWidth - 200.0f;
 constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPixelsPerMeter);
 constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
-constexpr float kTimeStep = 1.0f / 60.0f;
+constexpr float kStepDt = 1.0f / 60.0f;
 
 b2Body* createBox(b2World& world, b2BodyType type, const b2Vec2& position,
                   const b2Vec2& halfExtents, float density) {
@@ -95,14 +95,14 @@ int main() {
             wasMouseDown = mouseDown;
 
             const double currentTime = glfwGetTime();
-            const float frameTime = std::min(static_cast<float>(currentTime - previousTime),
-                                              kMaxFrameTime);
+            const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
 
+            const float frameTime = std::min(elapsedTime, kMaxFrameTime);
             accumulator += frameTime;
-            while (accumulator >= kTimeStep) {
-                world.Step(kTimeStep, 8, 3);
-                accumulator -= kTimeStep;
+            while (accumulator >= kStepDt) {
+                world.Step(kStepDt, 8, 3);
+                accumulator -= kStepDt;
             }
             for (auto box = boxes.begin(); box != boxes.end();) {
                 const b2Vec2 position = (*box)->GetPosition();
