@@ -28,9 +28,7 @@ constexpr float kBoxHalfWidth = gfx::pixelsToMeters(30.0f, kPixelsPerMeter);
 constexpr float kBoxHalfHeight = gfx::pixelsToMeters(20.0f, kPixelsPerMeter);
 constexpr float kCircleRadius = gfx::pixelsToMeters(24.0f, kPixelsPerMeter);
 constexpr float kPolygonRadius = 0.6f;
-constexpr float kGroundWidth = kWindowWidth - 200.0f;
-constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPixelsPerMeter);
-constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
+constexpr int kTerrainPointCount = 11;
 constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
@@ -138,6 +136,19 @@ void drawItem(const b2Body& body, float r, float g, float b) {
                 drawCircle(center, circle->m_radius, r, g, b);
                 break;
             }
+            case b2Shape::e_chain: {
+                const auto* chain = static_cast<const b2ChainShape*>(shape);
+                for (int i = 0; i < chain->m_count - 1; ++i) {
+                    const b2Vec2 start = b2Mul(transform, chain->m_vertices[i]);
+                    const b2Vec2 end = b2Mul(transform, chain->m_vertices[i + 1]);
+                    gfx::drawLine(
+                        gfx::metersToPixels(start.x, kPixelsPerMeter),
+                        gfx::metersToPixelsY(start.y, kWindowHeight, kPixelsPerMeter),
+                        gfx::metersToPixels(end.x, kPixelsPerMeter),
+                        gfx::metersToPixelsY(end.y, kWindowHeight, kPixelsPerMeter), r, g, b);
+                }
+                break;
+            }
             default:
                 throw std::invalid_argument("drawItem does not support this shape type");
         }
@@ -155,12 +166,17 @@ int main() {
 
         b2World world({0.0f, -9.8f});
 
-        b2PolygonShape groundShape;
-        groundShape.SetAsBox(kGroundHalfWidth, kGroundHalfHeight);
-        const Item ground = createItem(
-            world, b2_staticBody,
-            {gfx::pixelsToMeters(kWindowWidth / 2.0f, kPixelsPerMeter), kGroundHalfHeight},
-            groundShape, 0.0f, 0.6f, 0.0f, 0.65f, 0.65f, 0.65f);
+        const b2Vec2 terrainPoints[kTerrainPointCount] = {
+            {21.875f, 3.3f}, {20.0f, 3.8f},  {18.125f, 3.0f}, {16.25f, 3.6f},
+            {14.375f, 2.9f}, {12.5f, 3.8f},  {10.625f, 3.1f}, {8.75f, 3.7f},
+            {6.875f, 2.8f},  {5.0f, 3.5f},   {3.125f, 3.2f},
+        };
+        b2ChainShape terrainShape;
+        terrainShape.CreateChain(terrainPoints, kTerrainPointCount, {23.75f, 2.8f},
+                                 {1.25f, 2.9f});
+        const Item terrain =
+            createItem(world, b2_staticBody, {0.0f, 0.0f}, terrainShape, 0.0f, 0.6f, 0.0f,
+                       0.65f, 0.65f, 0.65f);
 
         std::vector<Item> items;
 
@@ -257,8 +273,7 @@ int main() {
 
             glClear(GL_COLOR_BUFFER_BIT);
 
-            drawItem(*ground.body, ground.r, ground.g, ground.b);
-            drawBodyAxes(*ground.body);
+            drawItem(*terrain.body, terrain.r, terrain.g, terrain.b);
 
             for (const Item& item : items) {
                 drawItem(*item.body, item.r, item.g, item.b);
