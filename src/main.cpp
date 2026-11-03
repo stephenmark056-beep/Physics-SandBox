@@ -7,6 +7,7 @@
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <box2d/box2d.h>
@@ -284,6 +285,7 @@ int main() {
         bool wasKey5Down = false;
         bool showAABBs = false;
         bool bWasDown = false;
+        std::string selectedShape = "Box";
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
@@ -309,6 +311,7 @@ int main() {
                 shape.SetAsBox(kBoxHalfWidth, kBoxHalfHeight);
                 items.push_back(createItem(world, b2_dynamicBody, spawnPosition, shape, 4.0f,
                                            0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+                selectedShape = "Box";
             };
 
             const bool key1Down = window.isKeyPressed(GLFW_KEY_1);
@@ -324,15 +327,19 @@ int main() {
                 shape.m_radius = kCircleRadius;
                 items.push_back(createItem(world, b2_dynamicBody, spawnPosition, shape, 4.0f,
                                            0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+                selectedShape = "Circle";
             }
             if (key3Down && !wasKey3Down) {
                 items.push_back(createRegularPolygonItem(world, spawnPosition, 3));
+                selectedShape = "Triangle";
             }
             if (key4Down && !wasKey4Down) {
                 items.push_back(createRegularPolygonItem(world, spawnPosition, 5));
+                selectedShape = "Pentagon";
             }
             if (key5Down && !wasKey5Down) {
                 items.push_back(createRegularPolygonItem(world, spawnPosition, 6));
+                selectedShape = "Hexagon";
             }
             wasKey1Down = key1Down;
             wasKey2Down = key2Down;
@@ -376,6 +383,11 @@ int main() {
                     ++item;
                 }
             }
+
+            window.setTitle(
+                selectedShape + " | Bodies: " + std::to_string(world.GetBodyCount()) +
+                " Contacts: " + std::to_string(world.GetContactCount()) +
+                " Joints: " + std::to_string(world.GetJointCount()));
 
             glClear(GL_COLOR_BUFFER_BIT);
 

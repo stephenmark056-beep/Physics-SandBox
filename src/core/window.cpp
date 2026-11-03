@@ -55,6 +55,10 @@ void Window::close() {
     glfwSetWindowShouldClose(handle_.get(), GLFW_TRUE);
 }
 
+void Window::setTitle(const std::string& title) const {
+    glfwSetWindowTitle(handle_.get(), title.c_str());
+}
+
 void Window::swapBuffers() {
     glfwSwapBuffers(handle_.get());
 }

@@ -24,6 +24,7 @@ public:
 
     bool shouldClose() const;
     void close();
+    void setTitle(const std::string& title) const;
     void swapBuffers();
     void pollEvents();
     bool isKeyPressed(int key) const;
