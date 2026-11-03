@@ -29,6 +29,12 @@ constexpr float kBoxHalfHeight = gfx::pixelsToMeters(20.0f, kPixelsPerMeter);
 constexpr float kCircleRadius = gfx::pixelsToMeters(24.0f, kPixelsPerMeter);
 constexpr float kPolygonRadius = 0.6f;
 constexpr int kTerrainPointCount = 11;
+constexpr float kPlatformMinX = 9.5f;
+constexpr float kPlatformMaxX = 15.5f;
+constexpr float kPlatformSpeed = 2.0f;
+constexpr float kPlatformHalfWidth = 1.5f;
+constexpr float kPlatformHalfHeight = 0.15f;
+constexpr float kPlatformY = 5.0f;
 constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
@@ -202,6 +208,13 @@ int main() {
             createItem(world, b2_staticBody, {0.0f, 0.0f}, terrainShape, 0.0f, 0.6f, 0.0f,
                        0.65f, 0.65f, 0.65f);
 
+        b2PolygonShape platformShape;
+        platformShape.SetAsBox(kPlatformHalfWidth, kPlatformHalfHeight);
+        const Item platform =
+            createItem(world, b2_kinematicBody, {kPlatformMinX, kPlatformY}, platformShape, 0.0f,
+                       0.8f, 0.0f, 0.65f, 0.65f, 0.65f);
+        platform.body->SetLinearVelocity({kPlatformSpeed, 0.0f});
+
         std::vector<Item> items;
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -290,6 +303,13 @@ int main() {
 
             accumulator += frameTime;
             while (accumulator >= kStepDt) {
+                const float platformX = platform.body->GetPosition().x;
+                const float platformVelocity = platform.body->GetLinearVelocity().x;
+                if (platformVelocity < 0.0f && platformX <= kPlatformMinX) {
+                    platform.body->SetLinearVelocity({kPlatformSpeed, 0.0f});
+                } else if (platformVelocity > 0.0f && platformX >= kPlatformMaxX) {
+                    platform.body->SetLinearVelocity({-kPlatformSpeed, 0.0f});
+                }
                 world.Step(kStepDt, 8, 3);
                 accumulator -= kStepDt;
             }
@@ -306,8 +326,11 @@ int main() {
             glClear(GL_COLOR_BUFFER_BIT);
 
             drawItem(*terrain.body, terrain.r, terrain.g, terrain.b);
+            drawItem(*platform.body, platform.r, platform.g, platform.b);
+            drawBodyAxes(*platform.body);
             if (showAABBs) {
                 drawAABBs(*terrain.body);
+                drawAABBs(*platform.body);
             }
 
             for (const Item& item : items) {
