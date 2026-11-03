@@ -155,6 +155,30 @@ void drawItem(const b2Body& body, float r, float g, float b) {
     }
 }
 
+void drawAABB(const b2AABB& aabb) {
+    const float left = gfx::metersToPixels(aabb.lowerBound.x, kPixelsPerMeter);
+    const float right = gfx::metersToPixels(aabb.upperBound.x, kPixelsPerMeter);
+    const float top = gfx::metersToPixelsY(aabb.upperBound.y, kWindowHeight, kPixelsPerMeter);
+    const float bottom = gfx::metersToPixelsY(aabb.lowerBound.y, kWindowHeight, kPixelsPerMeter);
+
+    gfx::drawLine(left, top, right, top, 1.0f, 1.0f, 0.0f);
+    gfx::drawLine(right, top, right, bottom, 1.0f, 1.0f, 0.0f);
+    gfx::drawLine(right, bottom, left, bottom, 1.0f, 1.0f, 0.0f);
+    gfx::drawLine(left, bottom, left, top, 1.0f, 1.0f, 0.0f);
+}
+
+void drawAABBs(const b2Body& body) {
+    for (const b2Fixture* fixture = body.GetFixtureList(); fixture != nullptr;
+         fixture = fixture->GetNext()) {
+        const b2Shape* shape = fixture->GetShape();
+        for (int childIndex = 0; childIndex < shape->GetChildCount(); ++childIndex) {
+            b2AABB aabb;
+            shape->ComputeAABB(&aabb, body.GetTransform(), childIndex);
+            drawAABB(aabb);
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -191,6 +215,8 @@ int main() {
         bool wasKey3Down = false;
         bool wasKey4Down = false;
         bool wasKey5Down = false;
+        bool showAABBs = false;
+        bool bWasDown = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
@@ -199,6 +225,12 @@ int main() {
             const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
             const float frameTime = std::min(elapsedTime, kMaxFrameTime);
+
+            const bool bDown = window.isKeyPressed(GLFW_KEY_B);
+            if (bDown && !bWasDown) {
+                showAABBs = !showAABBs;
+            }
+            bWasDown = bDown;
 
             double mouseX = 0.0, mouseY = 0.0;
             window.getCursorPosition(mouseX, mouseY);
@@ -274,10 +306,16 @@ int main() {
             glClear(GL_COLOR_BUFFER_BIT);
 
             drawItem(*terrain.body, terrain.r, terrain.g, terrain.b);
+            if (showAABBs) {
+                drawAABBs(*terrain.body);
+            }
 
             for (const Item& item : items) {
                 drawItem(*item.body, item.r, item.g, item.b);
                 drawBodyAxes(*item.body);
+                if (showAABBs) {
+                    drawAABBs(*item.body);
+                }
             }
 
             window.swapBuffers();
