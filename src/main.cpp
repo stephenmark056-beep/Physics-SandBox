@@ -26,6 +26,7 @@ constexpr float kPixelsPerMeter = 32.0f;
 // Decided to minimize the size of the box so that there will be more space for me to spam this
 constexpr float kBoxHalfWidth = gfx::pixelsToMeters(30.0f, kPixelsPerMeter);
 constexpr float kBoxHalfHeight = gfx::pixelsToMeters(20.0f, kPixelsPerMeter);
+constexpr float kCircleRadius = gfx::pixelsToMeters(24.0f, kPixelsPerMeter);
 constexpr float kGroundWidth = kWindowWidth - 200.0f;
 constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPixelsPerMeter);
 constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
@@ -34,28 +35,23 @@ constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
 constexpr float kSpawnInterval = 0.25f;
 constexpr float kAxisLength = 0.6f;
+constexpr int kCircleSegments = 24;
 
-struct Box {
+struct Item {
     b2Body* body;
-    b2Vec2 halfExtents;
-    float friction;
-    float restitution;
     float r;
     float g;
     float b;
 };
 
-Box createBox(b2World& world, b2BodyType type, const b2Vec2& position,
-              const b2Vec2& halfExtents, float density, float friction, float restitution,
-              float r, float g, float b, float angle = 0.0f) {
+Item createItem(b2World& world, b2BodyType type, const b2Vec2& position, const b2Shape& shape,
+                float density, float friction, float restitution, float r, float g, float b,
+                float angle = 0.0f) {
     b2BodyDef bodyDef;
     bodyDef.type = type;
     bodyDef.position = position;
     bodyDef.angle = angle;
     b2Body* body = world.CreateBody(&bodyDef);
-
-    b2PolygonShape shape;
-    shape.SetAsBox(halfExtents.x, halfExtents.y);
 
     b2FixtureDef fixtureDef;
     fixtureDef.shape = &shape;
@@ -63,7 +59,7 @@ Box createBox(b2World& world, b2BodyType type, const b2Vec2& position,
     fixtureDef.friction = friction;
     fixtureDef.restitution = restitution;
     body->CreateFixture(&fixtureDef);
-    return {body, halfExtents, friction, restitution, r, g, b};
+    return {body, r, g, b};
 }
 
 void drawBodyAxes(const b2Body& body) {
@@ -82,6 +78,20 @@ void drawBodyAxes(const b2Body& body) {
 
     drawWorldLine(xAxisEnd, 1.0f, 0.0f, 0.0f);
     drawWorldLine(yAxisEnd, 0.0f, 1.0f, 0.0f);
+}
+
+void drawCircle(const b2Vec2& center, float radius, float r, float g, float b) {
+    for (int i = 0; i < kCircleSegments; ++i) {
+        const float startAngle = 2.0f * b2_pi * static_cast<float>(i) / kCircleSegments;
+        const float endAngle = 2.0f * b2_pi * static_cast<float>(i + 1) / kCircleSegments;
+        const b2Vec2 start =
+            center + radius * b2Vec2(std::cos(startAngle), std::sin(startAngle));
+        const b2Vec2 end = center + radius * b2Vec2(std::cos(endAngle), std::sin(endAngle));
+        gfx::drawLine(gfx::metersToPixels(start.x, kPixelsPerMeter),
+                      gfx::metersToPixelsY(start.y, kWindowHeight, kPixelsPerMeter),
+                      gfx::metersToPixels(end.x, kPixelsPerMeter),
+                      gfx::metersToPixelsY(end.y, kWindowHeight, kPixelsPerMeter), r, g, b);
+    }
 }
 
 void drawItem(const b2Body& body, float r, float g, float b) {
@@ -104,6 +114,12 @@ void drawItem(const b2Body& body, float r, float g, float b) {
                 }
                 break;
             }
+            case b2Shape::e_circle: {
+                const auto* circle = static_cast<const b2CircleShape*>(shape);
+                const b2Vec2 center = b2Mul(transform, circle->m_p);
+                drawCircle(center, circle->m_radius, r, g, b);
+                break;
+            }
             default:
                 throw std::invalid_argument("drawItem does not support this shape type");
         }
@@ -121,12 +137,14 @@ int main() {
 
         b2World world({0.0f, -9.8f});
 
-        const Box ground = createBox(
+        b2PolygonShape groundShape;
+        groundShape.SetAsBox(kGroundHalfWidth, kGroundHalfHeight);
+        const Item ground = createItem(
             world, b2_staticBody,
             {gfx::pixelsToMeters(kWindowWidth / 2.0f, kPixelsPerMeter), kGroundHalfHeight},
-            {kGroundHalfWidth, kGroundHalfHeight}, 0.0f, 0.6f, 0.0f, 0.65f, 0.65f, 0.65f);
+            groundShape, 0.0f, 0.6f, 0.0f, 0.65f, 0.65f, 0.65f);
 
-        std::vector<Box> boxes;
+        std::vector<Item> items;
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
@@ -134,6 +152,8 @@ int main() {
         float accumulator = 0.0f;
         float spawnTimer = 0.0f;
         bool wasMouseDown = false;
+        bool wasKey1Down = false;
+        bool wasKey2Down = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
@@ -145,17 +165,32 @@ int main() {
 
             double mouseX = 0.0, mouseY = 0.0;
             window.getCursorPosition(mouseX, mouseY);
+            const b2Vec2 spawnPosition{
+                gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
+                gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight, kPixelsPerMeter)};
+            const auto spawnBoxAtCursor = [&]() {
+                b2PolygonShape shape;
+                shape.SetAsBox(kBoxHalfWidth, kBoxHalfHeight);
+                items.push_back(createItem(world, b2_dynamicBody, spawnPosition, shape, 4.0f,
+                                           0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+            };
+
+            const bool key1Down = window.isKeyPressed(GLFW_KEY_1);
+            const bool key2Down = window.isKeyPressed(GLFW_KEY_2);
+            if (key1Down && !wasKey1Down) {
+                spawnBoxAtCursor();
+            }
+            if (key2Down && !wasKey2Down) {
+                b2CircleShape shape;
+                shape.m_radius = kCircleRadius;
+                items.push_back(createItem(world, b2_dynamicBody, spawnPosition, shape, 4.0f,
+                                           0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
+            }
+            wasKey1Down = key1Down;
+            wasKey2Down = key2Down;
+
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             if (mouseDown) {
-                const auto spawnBoxAtCursor = [&]() {
-                    boxes.push_back(createBox(
-                        world, b2_dynamicBody,
-                        {gfx::pixelsToMeters(static_cast<float>(mouseX), kPixelsPerMeter),
-                         gfx::pixelsToMetersY(static_cast<float>(mouseY), kWindowHeight,
-                                              kPixelsPerMeter)},
-                        {kBoxHalfWidth, kBoxHalfHeight}, 4.0f, 0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
-                };
-
                 if (!wasMouseDown) {
                     spawnBoxAtCursor();
                 }
@@ -174,16 +209,13 @@ int main() {
                 world.Step(kStepDt, 8, 3);
                 accumulator -= kStepDt;
             }
-            for (auto box = boxes.begin(); box != boxes.end();) {
-                const b2Vec2 position = box->body->GetPosition();
-                const float angle = box->body->GetAngle();
-                const float verticalExtent = std::abs(std::sin(angle)) * box->halfExtents.x +
-                                             std::abs(std::cos(angle)) * box->halfExtents.y;
-                if (position.y - verticalExtent < kRemoveBelowY) {
-                    world.DestroyBody(box->body);
-                    box = boxes.erase(box);
+            for (auto item = items.begin(); item != items.end();) {
+                const b2Fixture* fixture = item->body->GetFixtureList();
+                if (fixture->GetAABB(0).lowerBound.y < kRemoveBelowY) {
+                    world.DestroyBody(item->body);
+                    item = items.erase(item);
                 } else {
-                    ++box;
+                    ++item;
                 }
             }
 
@@ -192,9 +224,9 @@ int main() {
             drawItem(*ground.body, ground.r, ground.g, ground.b);
             drawBodyAxes(*ground.body);
 
-            for (const Box& box : boxes) {
-                drawItem(*box.body, box.r, box.g, box.b);
-                drawBodyAxes(*box.body);
+            for (const Item& item : items) {
+                drawItem(*item.body, item.r, item.g, item.b);
+                drawBodyAxes(*item.body);
             }
 
             window.swapBuffers();
