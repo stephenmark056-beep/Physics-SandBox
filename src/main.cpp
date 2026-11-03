@@ -35,6 +35,11 @@ constexpr float kPlatformSpeed = 2.0f;
 constexpr float kPlatformHalfWidth = 1.5f;
 constexpr float kPlatformHalfHeight = 0.15f;
 constexpr float kPlatformY = 5.0f;
+constexpr float kRopeAnchorX = 3.0f;
+constexpr float kRopeAnchorY = 16.0f;
+constexpr int kRopeLinkCount = 6;
+constexpr float kRopeLinkLength = 1.0f;
+constexpr float kRopeLinkHalfHeight = 0.08f;
 constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
@@ -216,6 +221,26 @@ int main() {
         platform.body->SetLinearVelocity({kPlatformSpeed, 0.0f});
 
         std::vector<Item> items;
+
+        b2BodyDef anchorBodyDef;
+        anchorBodyDef.position.Set(kRopeAnchorX, kRopeAnchorY);
+        b2Body* anchorBody = world.CreateBody(&anchorBodyDef);
+        b2PolygonShape ropeLinkShape;
+        ropeLinkShape.SetAsBox(kRopeLinkLength / 2.0f, kRopeLinkHalfHeight);
+        b2Body* previousLink = anchorBody;
+        for (int i = 0; i < kRopeLinkCount; ++i) {
+            const b2Vec2 linkCenter{
+                kRopeAnchorX + (static_cast<float>(i) + 0.5f) * kRopeLinkLength, kRopeAnchorY};
+            const Item link = createItem(world, b2_dynamicBody, linkCenter, ropeLinkShape, 1.0f,
+                                         0.3f, 0.0f, 0.65f, 0.65f, 0.65f);
+            const b2Vec2 jointAnchor{
+                kRopeAnchorX + static_cast<float>(i) * kRopeLinkLength, kRopeAnchorY};
+            b2RevoluteJointDef jointDef;
+            jointDef.Initialize(previousLink, link.body, jointAnchor);
+            world.CreateJoint(&jointDef);
+            items.push_back(link);
+            previousLink = link.body;
+        }
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
