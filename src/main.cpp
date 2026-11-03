@@ -27,6 +27,7 @@ constexpr float kPixelsPerMeter = 32.0f;
 constexpr float kBoxHalfWidth = gfx::pixelsToMeters(30.0f, kPixelsPerMeter);
 constexpr float kBoxHalfHeight = gfx::pixelsToMeters(20.0f, kPixelsPerMeter);
 constexpr float kCircleRadius = gfx::pixelsToMeters(24.0f, kPixelsPerMeter);
+constexpr float kPolygonRadius = 0.6f;
 constexpr float kGroundWidth = kWindowWidth - 200.0f;
 constexpr float kGroundHalfWidth = gfx::pixelsToMeters(kGroundWidth / 2.0f, kPixelsPerMeter);
 constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
@@ -36,6 +37,7 @@ constexpr float kStepDt = 1.0f / 60.0f;
 constexpr float kSpawnInterval = 0.25f;
 constexpr float kAxisLength = 0.6f;
 constexpr int kCircleSegments = 24;
+constexpr float kDegreesToRadians = b2_pi / 180.0f;
 
 struct Item {
     b2Body* body;
@@ -60,6 +62,22 @@ Item createItem(b2World& world, b2BodyType type, const b2Vec2& position, const b
     fixtureDef.restitution = restitution;
     body->CreateFixture(&fixtureDef);
     return {body, r, g, b};
+}
+
+Item createRegularPolygonItem(b2World& world, const b2Vec2& position, int vertexCount) {
+    b2Vec2 points[b2_maxPolygonVertices];
+    for (int i = 0; i < vertexCount; ++i) {
+        const float angle = (90.0f + 360.0f * static_cast<float>(i) / vertexCount) *
+                            kDegreesToRadians;
+        points[i].Set(kPolygonRadius * std::cos(angle), kPolygonRadius * std::sin(angle));
+    }
+
+    b2PolygonShape shape;
+    if (!shape.Set(points, vertexCount)) {
+        throw std::runtime_error("Failed to create a valid polygon shape");
+    }
+    return createItem(world, b2_dynamicBody, position, shape, 4.0f, 0.3f, 0.0f, 1.0f, 0.5f,
+                      0.2f);
 }
 
 void drawBodyAxes(const b2Body& body) {
@@ -154,6 +172,9 @@ int main() {
         bool wasMouseDown = false;
         bool wasKey1Down = false;
         bool wasKey2Down = false;
+        bool wasKey3Down = false;
+        bool wasKey4Down = false;
+        bool wasKey5Down = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
@@ -177,6 +198,9 @@ int main() {
 
             const bool key1Down = window.isKeyPressed(GLFW_KEY_1);
             const bool key2Down = window.isKeyPressed(GLFW_KEY_2);
+            const bool key3Down = window.isKeyPressed(GLFW_KEY_3);
+            const bool key4Down = window.isKeyPressed(GLFW_KEY_4);
+            const bool key5Down = window.isKeyPressed(GLFW_KEY_5);
             if (key1Down && !wasKey1Down) {
                 spawnBoxAtCursor();
             }
@@ -186,8 +210,20 @@ int main() {
                 items.push_back(createItem(world, b2_dynamicBody, spawnPosition, shape, 4.0f,
                                            0.3f, 0.0f, 1.0f, 0.5f, 0.2f));
             }
+            if (key3Down && !wasKey3Down) {
+                items.push_back(createRegularPolygonItem(world, spawnPosition, 3));
+            }
+            if (key4Down && !wasKey4Down) {
+                items.push_back(createRegularPolygonItem(world, spawnPosition, 5));
+            }
+            if (key5Down && !wasKey5Down) {
+                items.push_back(createRegularPolygonItem(world, spawnPosition, 6));
+            }
             wasKey1Down = key1Down;
             wasKey2Down = key2Down;
+            wasKey3Down = key3Down;
+            wasKey4Down = key4Down;
+            wasKey5Down = key5Down;
 
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             if (mouseDown) {

@@ -129,7 +129,7 @@ void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b)
     glUseProgram(gRenderer.program);
     glUniform2f(gRenderer.centerLoc, (x1 + x2) * 0.5f, (y1 + y2) * 0.5f);
     glUniform2f(gRenderer.sizeLoc, length, 0.0f);
-    glUniform1f(gRenderer.angleLoc, std::atan2(-deltaY, deltaX));
+    glUniform1f(gRenderer.angleLoc, std::atan2(deltaY, deltaX));
     glUniform3f(gRenderer.colorLoc, r, g, b);
     glBindVertexArray(gRenderer.vao);
     glDrawArrays(GL_LINES, 0, 2);
