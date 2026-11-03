@@ -40,6 +40,11 @@ constexpr float kRopeAnchorY = 16.0f;
 constexpr int kRopeLinkCount = 6;
 constexpr float kRopeLinkLength = 1.0f;
 constexpr float kRopeLinkHalfHeight = 0.08f;
+constexpr float kPendulumAnchorX = 18.0f;
+constexpr float kPendulumAnchorY = 15.0f;
+constexpr float kPendulumBobX = 21.0f;
+constexpr float kPendulumBobY = 11.0f;
+constexpr float kPendulumBobRadius = 0.35f;
 constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
@@ -119,6 +124,13 @@ void drawCircle(const b2Vec2& center, float radius, float r, float g, float b) {
                       gfx::metersToPixels(end.x, kPixelsPerMeter),
                       gfx::metersToPixelsY(end.y, kWindowHeight, kPixelsPerMeter), r, g, b);
     }
+}
+
+void drawWorldLine(const b2Vec2& start, const b2Vec2& end, float r, float g, float b) {
+    gfx::drawLine(gfx::metersToPixels(start.x, kPixelsPerMeter),
+                  gfx::metersToPixelsY(start.y, kWindowHeight, kPixelsPerMeter),
+                  gfx::metersToPixels(end.x, kPixelsPerMeter),
+                  gfx::metersToPixelsY(end.y, kWindowHeight, kPixelsPerMeter), r, g, b);
 }
 
 void drawItem(const b2Body& body, float r, float g, float b) {
@@ -242,6 +254,23 @@ int main() {
             previousLink = link.body;
         }
 
+        b2CircleShape anchorShape;
+        anchorShape.m_radius = 0.12f;
+        const Item pendulumAnchorItem =
+            createItem(world, b2_staticBody, {kPendulumAnchorX, kPendulumAnchorY}, anchorShape,
+                       0.0f, 0.3f, 0.0f, 0.65f, 0.65f, 0.65f);
+
+        b2CircleShape bobShape;
+        bobShape.m_radius = kPendulumBobRadius;
+        const Item pendulumBob =
+            createItem(world, b2_dynamicBody, {kPendulumBobX, kPendulumBobY}, bobShape, 2.0f,
+                       0.3f, 0.0f, 1.0f, 0.5f, 0.2f);
+        b2DistanceJointDef pendulumJointDef;
+        pendulumJointDef.Initialize(pendulumAnchorItem.body, pendulumBob.body,
+                                    {kPendulumAnchorX, kPendulumAnchorY},
+                                    {kPendulumBobX, kPendulumBobY});
+        b2Joint* pendulumJoint = world.CreateJoint(&pendulumJointDef);
+
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
         double previousTime = glfwGetTime();
@@ -353,10 +382,18 @@ int main() {
             drawItem(*terrain.body, terrain.r, terrain.g, terrain.b);
             drawItem(*platform.body, platform.r, platform.g, platform.b);
             drawBodyAxes(*platform.body);
+            drawWorldLine(pendulumJoint->GetAnchorA(), pendulumJoint->GetAnchorB(), 0.8f, 0.8f,
+                          0.8f);
+            drawItem(*pendulumAnchorItem.body, pendulumAnchorItem.r, pendulumAnchorItem.g,
+                     pendulumAnchorItem.b);
             if (showAABBs) {
                 drawAABBs(*terrain.body);
                 drawAABBs(*platform.body);
+                drawAABBs(*pendulumAnchorItem.body);
+                drawAABBs(*pendulumBob.body);
             }
+            drawItem(*pendulumBob.body, pendulumBob.r, pendulumBob.g, pendulumBob.b);
+            drawBodyAxes(*pendulumBob.body);
 
             for (const Item& item : items) {
                 drawItem(*item.body, item.r, item.g, item.b);
