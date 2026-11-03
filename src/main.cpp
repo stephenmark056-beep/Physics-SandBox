@@ -31,7 +31,6 @@ constexpr float kGroundHalfHeight = gfx::pixelsToMeters(15.0f, kPixelsPerMeter);
 constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
-constexpr float kSlideSpeed = 5.0f;
 constexpr float kSpawnInterval = 0.25f;
 
 struct Box {
@@ -82,16 +81,6 @@ int main() {
             {kGroundHalfWidth, kGroundHalfHeight}, 0.0f, 0.6f, 0.0f, 0.65f, 0.65f, 0.65f);
 
         std::vector<Box> boxes;
-        boxes.push_back(createBox(world, b2_dynamicBody, {4.0f, kGroundHalfHeight * 2.0f + 0.5f},
-                                  {0.5f, 0.5f}, 1.0f, 0.9f, 0.0f, 0.9f, 0.3f, 0.3f));
-        boxes.push_back(createBox(world, b2_dynamicBody, {7.0f, kGroundHalfHeight * 2.0f + 0.5f},
-                                  {1.0f, 0.5f}, 1.0f, 0.05f, 0.0f, 0.3f, 0.5f, 0.9f));
-        boxes.push_back(createBox(world, b2_dynamicBody, {14.0f, 5.0f}, {0.75f, 0.75f}, 1.0f,
-                                  0.5f, 0.8f, 0.3f, 0.8f, 0.4f));
-        boxes.push_back(createBox(world, b2_dynamicBody, {18.0f, 8.0f}, {0.5f, 1.0f}, 1.0f,
-                                  0.5f, 0.4f, 0.9f, 0.8f, 0.3f, 0.4f));
-        boxes[0].body->SetLinearVelocity({kSlideSpeed, 0.0f});
-        boxes[1].body->SetLinearVelocity({kSlideSpeed, 0.0f});
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 

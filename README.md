@@ -1,9 +1,9 @@
 # Box2D Starter
 
 A C++20 and OpenGL starter for Box2D projects on Windows. It opens an 800x600
-window with an orange box that falls under gravity and lands on a static floor.
-The mouse is polled each frame and a left click prints its position to the
-console. Box2D v2.4.2 is vendored and built into a static library.
+window with a static floor. Hold the left mouse button to spawn orange boxes
+under the cursor; they fall under gravity and land on the floor. Box2D v2.4.2
+is vendored and built into a static library.
 
 GLFW, GLAD and Box2D are vendored, so nothing needs to be installed beyond the
 compiler.
