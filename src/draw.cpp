@@ -5,6 +5,7 @@
 #include <glad/glad.h>
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -132,6 +133,20 @@ void drawBox(float x, float y, float width, float height, float angleRadians, fl
     glUniform3f(gRenderer.colorLoc, r, g, b);
     glBindVertexArray(gRenderer.vao);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b) {
+    const float deltaX = x2 - x1;
+    const float deltaY = y2 - y1;
+    const float length = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    glUseProgram(gRenderer.program);
+    glUniform2f(gRenderer.centerLoc, (x1 + x2) * 0.5f, (y1 + y2) * 0.5f);
+    glUniform2f(gRenderer.sizeLoc, length, 0.0f);
+    glUniform1f(gRenderer.angleLoc, std::atan2(-deltaY, deltaX));
+    glUniform3f(gRenderer.colorLoc, r, g, b);
+    glBindVertexArray(gRenderer.vao);
+    glDrawArrays(GL_LINES, 0, 2);
 }
 
 void drawBoxBody(const b2Body& body, float pixelsPerMeter, float screenHeight, float r, float g,

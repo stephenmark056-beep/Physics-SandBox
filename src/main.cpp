@@ -32,6 +32,7 @@ constexpr float kRemoveBelowY = 0.0f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
 constexpr float kSpawnInterval = 0.25f;
+constexpr float kAxisLength = 0.6f;
 
 struct Box {
     b2Body* body;
@@ -62,6 +63,24 @@ Box createBox(b2World& world, b2BodyType type, const b2Vec2& position,
     fixtureDef.restitution = restitution;
     body->CreateFixture(&fixtureDef);
     return {body, halfExtents, friction, restitution, r, g, b};
+}
+
+void drawBodyAxes(const b2Body& body) {
+    const b2Transform transform = body.GetTransform();
+    const b2Vec2 origin = transform.p;
+    const b2Vec2 xAxisEnd = b2Mul(transform, b2Vec2(kAxisLength, 0.0f));
+    const b2Vec2 yAxisEnd = b2Mul(transform, b2Vec2(0.0f, kAxisLength));
+
+    const auto drawWorldLine = [&](const b2Vec2& end, float r, float g, float b) {
+        gfx::drawLine(
+            gfx::metersToPixels(origin.x, kPixelsPerMeter),
+            gfx::metersToPixelsY(origin.y, kWindowHeight, kPixelsPerMeter),
+            gfx::metersToPixels(end.x, kPixelsPerMeter),
+            gfx::metersToPixelsY(end.y, kWindowHeight, kPixelsPerMeter), r, g, b);
+    };
+
+    drawWorldLine(xAxisEnd, 1.0f, 0.0f, 0.0f);
+    drawWorldLine(yAxisEnd, 0.0f, 1.0f, 0.0f);
 }
 
 }  // namespace
@@ -145,9 +164,11 @@ int main() {
 
             gfx::drawBoxBody(*ground.body, kPixelsPerMeter, kWindowHeight, ground.r, ground.g,
                              ground.b);
+            drawBodyAxes(*ground.body);
 
             for (const Box& box : boxes) {
                 gfx::drawBoxBody(*box.body, kPixelsPerMeter, kWindowHeight, box.r, box.g, box.b);
+                drawBodyAxes(*box.body);
             }
 
             window.swapBuffers();

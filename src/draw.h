@@ -9,6 +9,7 @@ void shutdownDraw();
 
 void drawBox(float x, float y, float width, float height, float angleRadians, float r, float g,
              float b);
+void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b);
 void drawBoxBody(const b2Body& body, float pixelsPerMeter, float screenHeight, float r, float g,
                  float b);
 
