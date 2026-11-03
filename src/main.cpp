@@ -283,6 +283,7 @@ int main() {
         bool wasKey3Down = false;
         bool wasKey4Down = false;
         bool wasKey5Down = false;
+        bool wasKey6Down = false;
         bool showAABBs = false;
         bool bWasDown = false;
         std::string selectedShape = "Box";
@@ -319,6 +320,7 @@ int main() {
             const bool key3Down = window.isKeyPressed(GLFW_KEY_3);
             const bool key4Down = window.isKeyPressed(GLFW_KEY_4);
             const bool key5Down = window.isKeyPressed(GLFW_KEY_5);
+            const bool key6Down = window.isKeyPressed(GLFW_KEY_6);
             if (key1Down && !wasKey1Down) {
                 spawnBoxAtCursor();
             }
@@ -341,11 +343,16 @@ int main() {
                 items.push_back(createRegularPolygonItem(world, spawnPosition, 6));
                 selectedShape = "Hexagon";
             }
+            if (key6Down && !wasKey6Down) {
+                items.push_back(createRegularPolygonItem(world, spawnPosition, 7));
+                selectedShape = "Heptagon";
+            }
             wasKey1Down = key1Down;
             wasKey2Down = key2Down;
             wasKey3Down = key3Down;
             wasKey4Down = key4Down;
             wasKey5Down = key5Down;
+            wasKey6Down = key6Down;
 
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             if (mouseDown) {
