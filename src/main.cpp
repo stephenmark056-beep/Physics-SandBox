@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 #include <box2d/box2d.h>
@@ -81,6 +82,32 @@ void drawBodyAxes(const b2Body& body) {
 
     drawWorldLine(xAxisEnd, 1.0f, 0.0f, 0.0f);
     drawWorldLine(yAxisEnd, 0.0f, 1.0f, 0.0f);
+}
+
+void drawItem(const b2Body& body, float r, float g, float b) {
+    const b2Transform transform = body.GetTransform();
+    for (const b2Fixture* fixture = body.GetFixtureList(); fixture != nullptr;
+         fixture = fixture->GetNext()) {
+        const b2Shape* shape = fixture->GetShape();
+        switch (shape->GetType()) {
+            case b2Shape::e_polygon: {
+                const auto* polygon = static_cast<const b2PolygonShape*>(shape);
+                for (int i = 0; i < polygon->m_count; ++i) {
+                    const b2Vec2 start = b2Mul(transform, polygon->m_vertices[i]);
+                    const b2Vec2 end =
+                        b2Mul(transform, polygon->m_vertices[(i + 1) % polygon->m_count]);
+                    gfx::drawLine(
+                        gfx::metersToPixels(start.x, kPixelsPerMeter),
+                        gfx::metersToPixelsY(start.y, kWindowHeight, kPixelsPerMeter),
+                        gfx::metersToPixels(end.x, kPixelsPerMeter),
+                        gfx::metersToPixelsY(end.y, kWindowHeight, kPixelsPerMeter), r, g, b);
+                }
+                break;
+            }
+            default:
+                throw std::invalid_argument("drawItem does not support this shape type");
+        }
+    }
 }
 
 }  // namespace
@@ -162,12 +189,11 @@ int main() {
 
             glClear(GL_COLOR_BUFFER_BIT);
 
-            gfx::drawBoxBody(*ground.body, kPixelsPerMeter, kWindowHeight, ground.r, ground.g,
-                             ground.b);
+            drawItem(*ground.body, ground.r, ground.g, ground.b);
             drawBodyAxes(*ground.body);
 
             for (const Box& box : boxes) {
-                gfx::drawBoxBody(*box.body, kPixelsPerMeter, kWindowHeight, box.r, box.g, box.b);
+                drawItem(*box.body, box.r, box.g, box.b);
                 drawBodyAxes(*box.body);
             }
 

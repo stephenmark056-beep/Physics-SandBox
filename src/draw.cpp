@@ -1,10 +1,7 @@
 #include "draw.h"
 
-#include "core/coordinates.h"
-
 #include <glad/glad.h>
 
-#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -124,17 +121,6 @@ void shutdownDraw() {
     gRenderer = BoxRenderer{};
 }
 
-void drawBox(float x, float y, float width, float height, float angleRadians, float r, float g,
-             float b) {
-    glUseProgram(gRenderer.program);
-    glUniform2f(gRenderer.centerLoc, x, y);
-    glUniform2f(gRenderer.sizeLoc, width, height);
-    glUniform1f(gRenderer.angleLoc, angleRadians);
-    glUniform3f(gRenderer.colorLoc, r, g, b);
-    glBindVertexArray(gRenderer.vao);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-}
-
 void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b) {
     const float deltaX = x2 - x1;
     const float deltaY = y2 - y1;
@@ -147,32 +133,6 @@ void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b)
     glUniform3f(gRenderer.colorLoc, r, g, b);
     glBindVertexArray(gRenderer.vao);
     glDrawArrays(GL_LINES, 0, 2);
-}
-
-void drawBoxBody(const b2Body& body, float pixelsPerMeter, float screenHeight, float r, float g,
-                 float b) {
-    const b2Fixture* fixture = body.GetFixtureList();
-    if (fixture == nullptr || fixture->GetType() != b2Shape::e_polygon) {
-        throw std::invalid_argument("drawBoxBody requires a body with a polygon fixture");
-    }
-
-    const auto* shape = static_cast<const b2PolygonShape*>(fixture->GetShape());
-    float minX = shape->m_vertices[0].x;
-    float maxX = minX;
-    float minY = shape->m_vertices[0].y;
-    float maxY = minY;
-    for (int i = 1; i < shape->m_count; ++i) {
-        minX = std::min(minX, shape->m_vertices[i].x);
-        maxX = std::max(maxX, shape->m_vertices[i].x);
-        minY = std::min(minY, shape->m_vertices[i].y);
-        maxY = std::max(maxY, shape->m_vertices[i].y);
-    }
-
-    const b2Vec2 center = body.GetWorldPoint({(minX + maxX) * 0.5f, (minY + maxY) * 0.5f});
-    drawBox(metersToPixels(center.x, pixelsPerMeter),
-            metersToPixelsY(center.y, screenHeight, pixelsPerMeter),
-            metersToPixels(maxX - minX, pixelsPerMeter),
-            metersToPixels(maxY - minY, pixelsPerMeter), -body.GetAngle(), r, g, b);
 }
 
 }  // namespace gfx
