@@ -1,9 +1,9 @@
-# Box2D Starter
+# Physics Sandbox
 
-A C++20 and OpenGL starter for Box2D projects on Windows. It opens an 800x600
-window with a static floor. Hold the left mouse button to spawn orange boxes
-under the cursor; they fall under gravity and land on the floor. Box2D v2.4.2
-is vendored and built into a static library.
+A C++20 and OpenGL starter for physics projects on Windows. It opens an 800x600
+window with a teal background. The window is intentionally empty: no physics
+scene is initialized, nothing is drawn, and nothing spawns. Box2D v2.4.2 is
+vendored for future physics work.
 
 GLFW, GLAD and Box2D are vendored, so nothing needs to be installed beyond the
 compiler.
@@ -21,17 +21,16 @@ compiler.
 ## Build and run
 
 1. Open the folder in VS Code.
-2. Run the `Build Main` task (`Ctrl+Shift+B`). The first build also compiles
-   Box2D into `lib/libbox2d.a`, which takes about 40 seconds. Later builds
-   skip that step.
+2. Run the `Build Main` task (`Ctrl+Shift+B`).
 3. Run `main.exe` from the repo folder. Press `Esc` to close it.
 
-## Rebuild the Box2D library
+## Box2D library
 
 `lib/libbox2d.a` is not committed, because a static C++ library built with one
 GCC version can fail to link with another. Each machine builds its own. To
-rebuild it after switching compilers or editing `src/box2d/`, run the
-`Build Box2D library` task.
+build it after switching compilers or editing `src/box2d/`, run the
+`Build Box2D library` task. The empty window does not link Box2D; the library
+is kept for future physics work.
 
 ## Project structure
 
@@ -40,8 +39,8 @@ rebuild it after switching compilers or editing `src/box2d/`, run the
 glfw3.dll                 GLFW runtime, must sit next to main.exe
 lib/libglfw3dll.a         GLFW import library
 src/
-  main.cpp                window, Box2D world and falling rectangle
-  draw.h/.cpp             gfx::drawBox and shader setup
+  main.cpp                empty window, background and event loop
+  draw.h/.cpp             reusable line renderer, not used by the empty scene
   glad.c                  vendored GLAD loader
   core/                   GLFW context, window and keyboard input (gfx namespace)
   box2d/                  vendored Box2D v2.4.2 sources and its LICENSE
@@ -54,10 +53,8 @@ scripts/
 
 ## Troubleshooting
 
-- **`g++` or `ar` is not recognized, or the build fails with no error text.**
-  The MinGW `bin` folder is not on your `PATH`. Add it, then restart VS Code.
 - **`cannot open output file main.exe: Permission denied`.** The program is
   still running. Close its window and build again.
-- **Linker errors mentioning `box2d` or `libstdc++`.** `lib/libbox2d.a` came
-  from a different compiler. Delete it or run `Build Box2D library`.
+- **`g++` is not recognized.** The MinGW `bin` folder is not on your `PATH`.
+  Add it, then restart VS Code.
 - **Program compiles but won't run.** `glfw3.dll` must sit next to `main.exe`.
