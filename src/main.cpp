@@ -8,6 +8,7 @@
 #include <iostream>
 #include <numbers>
 #include <stdexcept>
+#include <vector>
 
 #include <box2d/box2d.h>
 
@@ -44,6 +45,13 @@ constexpr float kChargeRate = 20.0f;
 constexpr float kPowerBarWidth = 200.0f;
 constexpr float kPowerBarHeight = 16.0f;
 constexpr float kPowerBarMargin = 12.0f;
+constexpr float kTowerLeftX = 19.0f;
+constexpr float kTowerHalfSize = 0.4f;
+constexpr float kTowerDensity = 1.0f;
+constexpr int kTowerColumns = 3;
+constexpr int kTowerRows = 5;
+constexpr float kMaxFrameTime = 1.0f / 30.0f;
+constexpr float kStepDt = 1.0f / 60.0f;
 
 b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight) {
     b2BodyDef bodyDef;
@@ -57,7 +65,25 @@ b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float
     return body;
 }
 
-void drawBody(const b2Body& body) {
+b2Body* createTowerBlock(b2World& world, float x, float y) {
+    b2BodyDef bodyDef;
+    bodyDef.type = b2_dynamicBody;
+    bodyDef.position.Set(x, y);
+    b2Body* body = world.CreateBody(&bodyDef);
+
+    b2PolygonShape shape;
+    shape.SetAsBox(kTowerHalfSize, kTowerHalfSize);
+
+    b2FixtureDef fixtureDef;
+    fixtureDef.shape = &shape;
+    fixtureDef.density = kTowerDensity;
+    fixtureDef.friction = 0.5f;
+    body->CreateFixture(&fixtureDef);
+    return body;
+}
+
+void drawBody(const b2Body& body, float r = kGroundColor, float g = kGroundColor,
+              float b = kGroundColor) {
     for (const b2Fixture* fixture = body.GetFixtureList(); fixture != nullptr;
          fixture = fixture->GetNext()) {
         const b2Shape* shape = fixture->GetShape();
@@ -82,7 +108,7 @@ void drawBody(const b2Body& body) {
             gfx::metersToPixelsY(worldCenter.y, kWindowHeight, kPixelsPerMeter),
             gfx::metersToPixels(upperBound.x - lowerBound.x, kPixelsPerMeter),
             gfx::metersToPixels(upperBound.y - lowerBound.y, kPixelsPerMeter), -body.GetAngle(),
-            kGroundColor, kGroundColor, kGroundColor);
+            r, g, b);
     }
 }
 
@@ -147,20 +173,39 @@ int main() {
         b2Body* base = createStaticBox(world, kPivotX, kPivotY - kBaseHalfHeight,
                                        kBaseHalfWidth, kBaseHalfHeight);
 
+        std::vector<b2Body*> towerBlocks;
+        const float groundTopY = kGroundY + kGroundHalfHeight;
+        for (int row = 0; row < kTowerRows; ++row) {
+            for (int column = 0; column < kTowerColumns; ++column) {
+                const float x = kTowerLeftX + column * 2.0f * kTowerHalfSize;
+                const float y =
+                    groundTopY + kTowerHalfSize + row * 2.0f * kTowerHalfSize;
+                towerBlocks.push_back(createTowerBlock(world, x, y));
+            }
+        }
+
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         double previousTime = glfwGetTime();
         float power = kMinPower;
+        float accumulator = 0.0f;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
 
             const double currentTime = glfwGetTime();
-            const float frameTime = static_cast<float>(currentTime - previousTime);
+            const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
+            const float frameTime = std::min(elapsedTime, kMaxFrameTime);
             if (window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-                power = std::min(kMaxPower, power + kChargeRate * frameTime);
+                power = std::min(kMaxPower, power + kChargeRate * elapsedTime);
             } else {
                 power = kMinPower;
+            }
+
+            accumulator += frameTime;
+            while (accumulator >= kStepDt) {
+                world.Step(kStepDt, 8, 3);
+                accumulator -= kStepDt;
             }
 
             double mouseX = 0.0;
@@ -177,6 +222,9 @@ int main() {
             glClear(GL_COLOR_BUFFER_BIT);
             drawBody(*ground);
             drawBody(*base);
+            for (const b2Body* block : towerBlocks) {
+                drawBody(*block, 1.0f, 0.45f, 0.1f);
+            }
             drawBarrel(aimAngle);
             drawMuzzlePoint(aimAngle);
             gfx::drawCircle(gfx::metersToPixels(kPivotX, kPixelsPerMeter),
