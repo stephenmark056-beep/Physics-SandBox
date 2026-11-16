@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr int kCircleSegments = 32;
+constexpr int kCircleSegments = 24;
 
 constexpr const char* kVertexShaderSource = R"(#version 330 core
 layout (location = 0) in vec2 aPos;

@@ -39,6 +39,8 @@ constexpr float kMuzzleLength = 0.2f;
 constexpr float kMuzzleHalfHeight = 0.35f;
 constexpr float kMuzzlePointSize = 0.2f;
 constexpr float kPivotRadius = 0.3f;
+constexpr float kCannonballRadius = 0.2f;
+constexpr float kCannonballDensity = 3.0f;
 constexpr float kMaxAimAngle = std::numbers::pi_v<float> / 2.0f - 0.01f;
 constexpr float kMinPower = 20.0f;
 constexpr float kMaxPower = 40.0f;
@@ -86,6 +88,23 @@ b2Body* createTowerBlock(b2World& world, float x, float y) {
     fixtureDef.shape = &shape;
     fixtureDef.density = kTowerDensity;
     fixtureDef.friction = 0.5f;
+    body->CreateFixture(&fixtureDef);
+    return body;
+}
+
+b2Body* createCannonball(b2World& world, const b2Vec2& position) {
+    b2BodyDef bodyDef;
+    bodyDef.type = b2_dynamicBody;
+    bodyDef.position = position;
+    b2Body* body = world.CreateBody(&bodyDef);
+
+    b2CircleShape shape;
+    shape.m_radius = kCannonballRadius;
+
+    b2FixtureDef fixtureDef;
+    fixtureDef.shape = &shape;
+    fixtureDef.density = kCannonballDensity;
+    fixtureDef.friction = 0.3f;
     body->CreateFixture(&fixtureDef);
     return body;
 }
@@ -182,6 +201,7 @@ int main() {
                                        kBaseHalfWidth, kBaseHalfHeight);
 
         std::vector<TowerBlock> towerBlocks;
+        std::vector<b2Body*> cannonballs;
         const float groundTopY = kGroundY + kGroundHalfHeight;
         for (int row = 0; row < kTowerRows; ++row) {
             for (int column = 0; column < kTowerColumns; ++column) {
@@ -200,15 +220,17 @@ int main() {
         double previousTime = glfwGetTime();
         float power = kMinPower;
         float accumulator = 0.0f;
+        bool wasMouseDown = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
+            const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
 
             const double currentTime = glfwGetTime();
             const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
             const float frameTime = std::min(elapsedTime, kMaxFrameTime);
-            if (window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            if (mouseDown) {
                 power = std::min(kMaxPower, power + kChargeRate * elapsedTime);
             } else {
                 power = kMinPower;
@@ -247,6 +269,14 @@ int main() {
             const float dy = mouseWorldY - kPivotY;
             const float aimAngle = std::clamp(std::atan2(dy, dx), 0.0f, kMaxAimAngle);
 
+            if (wasMouseDown && !mouseDown) {
+                const b2Vec2 muzzlePosition(
+                    kPivotX + std::cos(aimAngle) * kBarrelLength,
+                    kPivotY + std::sin(aimAngle) * kBarrelLength);
+                cannonballs.push_back(createCannonball(world, muzzlePosition));
+            }
+            wasMouseDown = mouseDown;
+
             glClear(GL_COLOR_BUFFER_BIT);
             drawBody(*ground);
             drawBody(*base);
@@ -265,6 +295,13 @@ int main() {
                             gfx::metersToPixelsY(kPivotY, kWindowHeight, kPixelsPerMeter),
                             gfx::metersToPixels(kPivotRadius, kPixelsPerMeter), 0.45f, 0.45f,
                             0.45f);
+            for (const b2Body* ball : cannonballs) {
+                const b2Vec2 position = ball->GetPosition();
+                gfx::drawCircle(gfx::metersToPixels(position.x, kPixelsPerMeter),
+                                gfx::metersToPixelsY(position.y, kWindowHeight, kPixelsPerMeter),
+                                gfx::metersToPixels(kCannonballRadius, kPixelsPerMeter), 0.1f,
+                                0.1f, 0.1f);
+            }
             drawPowerBar(power);
             window.swapBuffers();
             window.pollEvents();
