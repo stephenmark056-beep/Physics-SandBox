@@ -109,6 +109,20 @@ b2Body* createTowerBlock(b2World& world, float x, float y) {
     return body;
 }
 
+std::vector<TowerBlock> createTowerBlocks(b2World& world) {
+    std::vector<TowerBlock> blocks;
+    const float groundTopY = kGroundY + kGroundHalfHeight;
+    for (int row = 0; row < kTowerRows; ++row) {
+        for (int column = 0; column < kTowerColumns; ++column) {
+            const float x = kTowerLeftX + column * 2.0f * kTowerHalfSize;
+            const float y = groundTopY + kTowerHalfSize + row * 2.0f * kTowerHalfSize;
+            b2Body* body = createTowerBlock(world, x, y);
+            blocks.push_back({body, body->GetPosition(), false});
+        }
+    }
+    return blocks;
+}
+
 b2Body* createCannonball(b2World& world, const b2Vec2& position) {
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;
@@ -278,18 +292,8 @@ int main() {
         b2Body* base = createStaticBox(world, kPivotX, kPivotY - kBaseHalfHeight,
                                        kBaseHalfWidth, kBaseHalfHeight);
 
-        std::vector<TowerBlock> towerBlocks;
+        std::vector<TowerBlock> towerBlocks = createTowerBlocks(world);
         std::vector<b2Body*> cannonballs;
-        const float groundTopY = kGroundY + kGroundHalfHeight;
-        for (int row = 0; row < kTowerRows; ++row) {
-            for (int column = 0; column < kTowerColumns; ++column) {
-                const float x = kTowerLeftX + column * 2.0f * kTowerHalfSize;
-                const float y =
-                    groundTopY + kTowerHalfSize + row * 2.0f * kTowerHalfSize;
-                b2Body* body = createTowerBlock(world, x, y);
-                towerBlocks.push_back({body, body->GetPosition(), false});
-            }
-        }
 
         int knockedCount = 0;
         int shotsLeft = kMaxShots;
@@ -301,9 +305,31 @@ int main() {
         float power = kMinPower;
         float accumulator = 0.0f;
         bool wasMouseDown = false;
+        bool rWasDown = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
+            const bool rDown = window.isKeyPressed(GLFW_KEY_R);
+            const bool resetPressed = rDown && !rWasDown;
+            rWasDown = rDown;
+            if (resetPressed) {
+                for (const TowerBlock& block : towerBlocks) {
+                    world.DestroyBody(block.body);
+                }
+                for (b2Body* ball : cannonballs) {
+                    world.DestroyBody(ball);
+                }
+                towerBlocks = createTowerBlocks(world);
+                cannonballs.clear();
+                knockedCount = 0;
+                shotsLeft = kMaxShots;
+                gameState = GameState::playing;
+                power = kMinPower;
+                accumulator = 0.0f;
+                wasMouseDown = false;
+                updateWindowTitle(window, knockedCount, shotsLeft, gameState);
+            }
+
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             const bool mouseReleased = wasMouseDown && !mouseDown;
             const GameState previousGameState = gameState;
