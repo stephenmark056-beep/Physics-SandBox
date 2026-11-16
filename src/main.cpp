@@ -44,6 +44,9 @@ constexpr float kCannonballDensity = 3.0f;
 constexpr float kWorldWidth = kWindowWidth / kPixelsPerMeter;
 constexpr float kWorldHeight = kWindowHeight / kPixelsPerMeter;
 constexpr float kRemoveBelowY = -10.0f;
+constexpr float kArcTimeStep = 0.02f;
+constexpr float kArcDotRadius = 0.06f;
+constexpr int kMaxArcDots = 500;
 constexpr float kMaxAimAngle = std::numbers::pi_v<float> / 2.0f - 0.01f;
 constexpr float kMinPower = 20.0f;
 constexpr float kMaxPower = 40.0f;
@@ -171,6 +174,30 @@ void drawMuzzlePoint(float angle) {
     gfx::drawBox(gfx::metersToPixels(muzzleX, kPixelsPerMeter),
                  gfx::metersToPixelsY(muzzleY, kWindowHeight, kPixelsPerMeter), size, size, 0.0f,
                  1.0f, 0.9f, 0.0f);
+}
+
+void drawArcPreview(float speed, float angle, float gravityY) {
+    const b2Vec2 start(kPivotX + std::cos(angle) * kBarrelLength,
+                       kPivotY + std::sin(angle) * kBarrelLength);
+    const float velocityX = speed * std::cos(angle);
+    const float velocityY = speed * std::sin(angle);
+    const float groundContactY = kGroundY + kGroundHalfHeight + kCannonballRadius;
+
+    for (int i = 1; i <= kMaxArcDots; ++i) {
+        const float time = i * kArcTimeStep;
+        const b2Vec2 position(start.x + velocityX * time,
+                              start.y + velocityY * time +
+                                  0.5f * gravityY * time * time);
+        if (position.x + kCannonballRadius >= kWorldWidth ||
+            position.y <= groundContactY) {
+            break;
+        }
+
+        gfx::drawCircle(gfx::metersToPixels(position.x, kPixelsPerMeter),
+                        gfx::metersToPixelsY(position.y, kWindowHeight, kPixelsPerMeter),
+                        gfx::metersToPixels(kArcDotRadius, kPixelsPerMeter), 1.0f, 1.0f,
+                        1.0f);
+    }
 }
 
 void drawPowerBar(float power) {
@@ -318,6 +345,7 @@ int main() {
                     drawBody(*block.body, 0.55f, 0.22f, 0.05f);
                 }
             }
+            drawArcPreview(power, aimAngle, world.GetGravity().y);
             drawBarrel(aimAngle);
             drawMuzzlePoint(aimAngle);
             gfx::drawCircle(gfx::metersToPixels(kPivotX, kPixelsPerMeter),
