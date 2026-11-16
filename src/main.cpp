@@ -223,7 +223,11 @@ int main() {
             drawBody(*ground);
             drawBody(*base);
             for (const b2Body* block : towerBlocks) {
-                drawBody(*block, 1.0f, 0.45f, 0.1f);
+                if (block->IsAwake()) {
+                    drawBody(*block, 1.0f, 0.45f, 0.1f);
+                } else {
+                    drawBody(*block, 0.55f, 0.22f, 0.05f);
+                }
             }
             drawBarrel(aimAngle);
             drawMuzzlePoint(aimAngle);
