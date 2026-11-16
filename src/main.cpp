@@ -38,6 +38,12 @@ constexpr float kMuzzleHalfHeight = 0.35f;
 constexpr float kMuzzlePointSize = 0.2f;
 constexpr float kPivotRadius = 0.3f;
 constexpr float kMaxAimAngle = std::numbers::pi_v<float> / 2.0f - 0.01f;
+constexpr float kMinPower = 20.0f;
+constexpr float kMaxPower = 40.0f;
+constexpr float kChargeRate = 20.0f;
+constexpr float kPowerBarWidth = 200.0f;
+constexpr float kPowerBarHeight = 16.0f;
+constexpr float kPowerBarMargin = 12.0f;
 
 b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight) {
     b2BodyDef bodyDef;
@@ -111,6 +117,20 @@ void drawMuzzlePoint(float angle) {
                  1.0f, 0.9f, 0.0f);
 }
 
+void drawPowerBar(float power) {
+    const float barY = kWindowHeight - kPowerBarMargin - kPowerBarHeight / 2.0f;
+    const float barLeft = kPowerBarMargin;
+    gfx::drawBox(barLeft + kPowerBarWidth / 2.0f, barY, kPowerBarWidth, kPowerBarHeight, 0.0f,
+                 0.12f, 0.12f, 0.16f);
+
+    const float fillFraction = (power - kMinPower) / (kMaxPower - kMinPower);
+    const float fillWidth = kPowerBarWidth * fillFraction;
+    if (fillWidth > 0.0f) {
+        gfx::drawBox(barLeft + fillWidth / 2.0f, barY, fillWidth, kPowerBarHeight, 0.0f, 0.1f,
+                     0.45f, 1.0f);
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -128,9 +148,20 @@ int main() {
                                        kBaseHalfWidth, kBaseHalfHeight);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        double previousTime = glfwGetTime();
+        float power = kMinPower;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
+
+            const double currentTime = glfwGetTime();
+            const float frameTime = static_cast<float>(currentTime - previousTime);
+            previousTime = currentTime;
+            if (window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                power = std::min(kMaxPower, power + kChargeRate * frameTime);
+            } else {
+                power = kMinPower;
+            }
 
             double mouseX = 0.0;
             double mouseY = 0.0;
@@ -152,6 +183,7 @@ int main() {
                             gfx::metersToPixelsY(kPivotY, kWindowHeight, kPixelsPerMeter),
                             gfx::metersToPixels(kPivotRadius, kPixelsPerMeter), 0.45f, 0.45f,
                             0.45f);
+            drawPowerBar(power);
             window.swapBuffers();
             window.pollEvents();
         }
