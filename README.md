@@ -1,9 +1,9 @@
 # Physics Sandbox
 
 A C++20 and OpenGL starter for physics projects on Windows. It opens an 800x600
-window with a teal background. The window is intentionally empty: no physics
-scene is initialized, nothing is drawn, and nothing spawns. Box2D v2.4.2 is
-vendored for future physics work.
+window with a teal background, a gray ground bar, and a gray cannon base at the
+left. The ground and base are static Box2D bodies; their fixtures define the
+geometry used for rendering. Box2D v2.4.2 is vendored in the project.
 
 GLFW, GLAD and Box2D are vendored, so nothing needs to be installed beyond the
 compiler.
@@ -39,8 +39,8 @@ is kept for future physics work.
 glfw3.dll                 GLFW runtime, must sit next to main.exe
 lib/libglfw3dll.a         GLFW import library
 src/
-  main.cpp                empty window, background and event loop
-  draw.h/.cpp             reusable line renderer, not used by the empty scene
+  main.cpp                Box2D ground and cannon base, background and loop
+  draw.h/.cpp             reusable box and line renderer
   glad.c                  vendored GLAD loader
   core/                   GLFW context, window and keyboard input (gfx namespace)
   box2d/                  vendored Box2D v2.4.2 sources and its LICENSE

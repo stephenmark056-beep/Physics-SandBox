@@ -121,6 +121,17 @@ void shutdownDraw() {
     gRenderer = BoxRenderer{};
 }
 
+void drawBox(float centerX, float centerY, float width, float height, float angle, float r, float g,
+             float b) {
+    glUseProgram(gRenderer.program);
+    glUniform2f(gRenderer.centerLoc, centerX, centerY);
+    glUniform2f(gRenderer.sizeLoc, width, height);
+    glUniform1f(gRenderer.angleLoc, angle);
+    glUniform3f(gRenderer.colorLoc, r, g, b);
+    glBindVertexArray(gRenderer.vao);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
 void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b) {
     const float deltaX = x2 - x1;
     const float deltaY = y2 - y1;

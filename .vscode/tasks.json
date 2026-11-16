@@ -4,6 +4,7 @@
         {
             "type": "shell",
             "label": "Build Main",
+            "dependsOn": "Ensure Box2D Library",
             "command": "g++",
             "args": [
                 "-g",
@@ -19,6 +20,7 @@
                 "${workspaceFolder}/src/core/window.cpp",
                 "${workspaceFolder}/src/core/input.cpp",
                 "${workspaceFolder}/src/glad.c",
+                "-lbox2d",
                 "-lglfw3dll",
                 "-lopengl32",
                 "-lgdi32",
@@ -36,6 +38,20 @@
                 "isDefault": true
             },
             "detail": "compiler: g++"
+        },
+        {
+            "type": "process",
+            "label": "Ensure Box2D Library",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "if not exist lib\\libbox2d.a call scripts\\build_box2d.bat"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "builds lib/libbox2d.a only if it is missing"
         },
         {
             "type": "process",
