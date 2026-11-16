@@ -102,6 +102,7 @@ b2Body* createCannonball(b2World& world, const b2Vec2& position) {
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;
     bodyDef.position = position;
+    bodyDef.bullet = true;
     b2Body* body = world.CreateBody(&bodyDef);
 
     b2CircleShape shape;
