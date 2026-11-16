@@ -225,14 +225,19 @@ int main() {
         while (!window.shouldClose()) {
             gfx::processInput(window);
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+            const bool mouseReleased = wasMouseDown && !mouseDown;
 
             const double currentTime = glfwGetTime();
             const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
             const float frameTime = std::min(elapsedTime, kMaxFrameTime);
+            float launchPower = kMinPower;
             if (mouseDown) {
                 power = std::min(kMaxPower, power + kChargeRate * elapsedTime);
             } else {
+                if (mouseReleased) {
+                    launchPower = power;
+                }
                 power = kMinPower;
             }
 
@@ -269,11 +274,17 @@ int main() {
             const float dy = mouseWorldY - kPivotY;
             const float aimAngle = std::clamp(std::atan2(dy, dx), 0.0f, kMaxAimAngle);
 
-            if (wasMouseDown && !mouseDown) {
+            if (mouseReleased) {
                 const b2Vec2 muzzlePosition(
                     kPivotX + std::cos(aimAngle) * kBarrelLength,
                     kPivotY + std::sin(aimAngle) * kBarrelLength);
-                cannonballs.push_back(createCannonball(world, muzzlePosition));
+                b2Body* ball = createCannonball(world, muzzlePosition);
+                const float impulseMagnitude = ball->GetMass() * launchPower;
+                ball->ApplyLinearImpulseToCenter(
+                    {impulseMagnitude * std::cos(aimAngle),
+                     impulseMagnitude * std::sin(aimAngle)},
+                    true);
+                cannonballs.push_back(ball);
             }
             wasMouseDown = mouseDown;
 
