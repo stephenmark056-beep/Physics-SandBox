@@ -54,6 +54,11 @@ constexpr float kChargeRate = 50.0f;
 constexpr float kPowerBarWidth = 200.0f;
 constexpr float kPowerBarHeight = 16.0f;
 constexpr float kPowerBarMargin = 12.0f;
+constexpr int kMaxShots = 5;
+constexpr float kAmmoSquareSize = 16.0f;
+constexpr float kAmmoSquareSpacing = 24.0f;
+constexpr float kAmmoSquareStartX = 24.0f;
+constexpr float kAmmoSquareY = 24.0f;
 constexpr float kTowerLeftX = 19.0f;
 constexpr float kTowerHalfSize = 0.4f;
 constexpr float kTowerDensity = 1.0f;
@@ -215,6 +220,19 @@ void drawPowerBar(float power) {
     }
 }
 
+void drawAmmo(int shotsLeft) {
+    for (int i = 0; i < shotsLeft; ++i) {
+        gfx::drawBox(kAmmoSquareStartX + i * kAmmoSquareSpacing, kAmmoSquareY,
+                     kAmmoSquareSize, kAmmoSquareSize, 0.0f, 0.9f, 0.1f, 0.1f);
+    }
+}
+
+void updateWindowTitle(const gfx::Window& window, int knockedCount, int shotsLeft) {
+    window.setTitle("knocked: " + std::to_string(knockedCount) + "/" +
+                    std::to_string(kTowerColumns * kTowerRows) + " | shots left: " +
+                    std::to_string(shotsLeft));
+}
+
 }  // namespace
 
 int main() {
@@ -245,7 +263,8 @@ int main() {
         }
 
         int knockedCount = 0;
-        window.setTitle("knocked: 0/" + std::to_string(static_cast<int>(towerBlocks.size())));
+        int shotsLeft = kMaxShots;
+        updateWindowTitle(window, knockedCount, shotsLeft);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         double previousTime = glfwGetTime();
@@ -257,16 +276,17 @@ int main() {
             gfx::processInput(window);
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             const bool mouseReleased = wasMouseDown && !mouseDown;
+            const bool canCharge = mouseDown && shotsLeft > 0;
 
             const double currentTime = glfwGetTime();
             const float elapsedTime = static_cast<float>(currentTime - previousTime);
             previousTime = currentTime;
             const float frameTime = std::min(elapsedTime, kMaxFrameTime);
             float launchPower = kMinPower;
-            if (mouseDown) {
+            if (canCharge) {
                 power = std::min(kMaxPower, power + kChargeRate * elapsedTime);
             } else {
-                if (mouseReleased) {
+                if (mouseReleased && shotsLeft > 0) {
                     launchPower = power;
                 }
                 power = kMinPower;
@@ -304,11 +324,6 @@ int main() {
                     }
                 }
             }
-            if (knockedCountChanged) {
-                window.setTitle("knocked: " + std::to_string(knockedCount) + "/" +
-                                std::to_string(static_cast<int>(towerBlocks.size())));
-            }
-
             double mouseX = 0.0;
             double mouseY = 0.0;
             window.getCursorPosition(mouseX, mouseY);
@@ -320,7 +335,8 @@ int main() {
             const float dy = mouseWorldY - kPivotY;
             const float aimAngle = std::clamp(std::atan2(dy, dx), 0.0f, kMaxAimAngle);
 
-            if (mouseReleased) {
+            bool shotFired = false;
+            if (mouseReleased && shotsLeft > 0) {
                 const b2Vec2 muzzlePosition(
                     kPivotX + std::cos(aimAngle) * kBarrelLength,
                     kPivotY + std::sin(aimAngle) * kBarrelLength);
@@ -331,8 +347,13 @@ int main() {
                      impulseMagnitude * std::sin(aimAngle)},
                     true);
                 cannonballs.push_back(ball);
+                --shotsLeft;
+                shotFired = true;
             }
             wasMouseDown = mouseDown;
+            if (knockedCountChanged || shotFired) {
+                updateWindowTitle(window, knockedCount, shotsLeft);
+            }
 
             glClear(GL_COLOR_BUFFER_BIT);
             drawBody(*ground);
@@ -361,6 +382,7 @@ int main() {
                                 0.1f, 0.1f);
             }
             drawPowerBar(power);
+            drawAmmo(shotsLeft);
             window.swapBuffers();
             window.pollEvents();
         }
