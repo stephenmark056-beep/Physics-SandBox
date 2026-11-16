@@ -35,6 +35,7 @@ constexpr float kBarrelLength = 1.5f;
 constexpr float kBarrelHalfHeight = 0.25f;
 constexpr float kMuzzleLength = 0.2f;
 constexpr float kMuzzleHalfHeight = 0.35f;
+constexpr float kMuzzlePointSize = 0.2f;
 constexpr float kPivotRadius = 0.3f;
 constexpr float kMaxAimAngle = std::numbers::pi_v<float> / 2.0f - 0.01f;
 
@@ -101,6 +102,15 @@ void drawBarrel(float angle) {
         0.35f);
 }
 
+void drawMuzzlePoint(float angle) {
+    const float muzzleX = kPivotX + std::cos(angle) * kBarrelLength;
+    const float muzzleY = kPivotY + std::sin(angle) * kBarrelLength;
+    const float size = gfx::metersToPixels(kMuzzlePointSize, kPixelsPerMeter);
+    gfx::drawBox(gfx::metersToPixels(muzzleX, kPixelsPerMeter),
+                 gfx::metersToPixelsY(muzzleY, kWindowHeight, kPixelsPerMeter), size, size, 0.0f,
+                 1.0f, 0.9f, 0.0f);
+}
+
 }  // namespace
 
 int main() {
@@ -137,6 +147,7 @@ int main() {
             drawBody(*ground);
             drawBody(*base);
             drawBarrel(aimAngle);
+            drawMuzzlePoint(aimAngle);
             gfx::drawCircle(gfx::metersToPixels(kPivotX, kPixelsPerMeter),
                             gfx::metersToPixelsY(kPivotY, kWindowHeight, kPixelsPerMeter),
                             gfx::metersToPixels(kPivotRadius, kPixelsPerMeter), 0.45f, 0.45f,
