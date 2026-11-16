@@ -2,11 +2,15 @@
 
 #include <glad/glad.h>
 
+#include <array>
 #include <cmath>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 
 namespace {
+
+constexpr int kCircleSegments = 32;
 
 constexpr const char* kVertexShaderSource = R"(#version 330 core
 layout (location = 0) in vec2 aPos;
@@ -33,6 +37,8 @@ struct BoxRenderer {
     GLuint program = 0;
     GLuint vao = 0;
     GLuint vbo = 0;
+    GLuint circleVao = 0;
+    GLuint circleVbo = 0;
     GLint centerLoc = -1;
     GLint sizeLoc = -1;
     GLint angleLoc = -1;
@@ -112,11 +118,32 @@ void initDraw(int screenWidth, int screenHeight) {
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    std::array<float, (kCircleSegments + 2) * 2> circleVertices{};
+    for (int i = 0; i <= kCircleSegments; ++i) {
+        const float angle = 2.0f * std::numbers::pi_v<float> * i / kCircleSegments;
+        const int vertexIndex = i + 1;
+        circleVertices[vertexIndex * 2] = 0.5f * std::cos(angle);
+        circleVertices[vertexIndex * 2 + 1] = 0.5f * std::sin(angle);
+    }
+
+    glGenVertexArrays(1, &gRenderer.circleVao);
+    glGenBuffers(1, &gRenderer.circleVbo);
+    glBindVertexArray(gRenderer.circleVao);
+    glBindBuffer(GL_ARRAY_BUFFER, gRenderer.circleVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(circleVertices), circleVertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 void shutdownDraw() {
     glDeleteVertexArrays(1, &gRenderer.vao);
     glDeleteBuffers(1, &gRenderer.vbo);
+    glDeleteVertexArrays(1, &gRenderer.circleVao);
+    glDeleteBuffers(1, &gRenderer.circleVbo);
     glDeleteProgram(gRenderer.program);
     gRenderer = BoxRenderer{};
 }
@@ -130,6 +157,16 @@ void drawBox(float centerX, float centerY, float width, float height, float angl
     glUniform3f(gRenderer.colorLoc, r, g, b);
     glBindVertexArray(gRenderer.vao);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+void drawCircle(float centerX, float centerY, float radius, float r, float g, float b) {
+    glUseProgram(gRenderer.program);
+    glUniform2f(gRenderer.centerLoc, centerX, centerY);
+    glUniform2f(gRenderer.sizeLoc, radius * 2.0f, radius * 2.0f);
+    glUniform1f(gRenderer.angleLoc, 0.0f);
+    glUniform3f(gRenderer.colorLoc, r, g, b);
+    glBindVertexArray(gRenderer.circleVao);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, kCircleSegments + 2);
 }
 
 void drawLine(float x1, float y1, float x2, float y2, float r, float g, float b) {

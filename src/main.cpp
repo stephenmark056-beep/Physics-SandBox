@@ -32,7 +32,10 @@ constexpr float kBaseHalfWidth = 1.0f;
 constexpr float kBaseHalfHeight = 0.5f;
 constexpr float kGroundColor = 0.65f;
 constexpr float kBarrelLength = 1.5f;
-constexpr float kBarrelHalfHeight = 0.125f;
+constexpr float kBarrelHalfHeight = 0.25f;
+constexpr float kMuzzleLength = 0.2f;
+constexpr float kMuzzleHalfHeight = 0.35f;
+constexpr float kPivotRadius = 0.3f;
 constexpr float kMaxAimAngle = std::numbers::pi_v<float> / 2.0f - 0.01f;
 
 b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight) {
@@ -85,6 +88,17 @@ void drawBarrel(float angle) {
         gfx::metersToPixels(kBarrelLength, kPixelsPerMeter),
         gfx::metersToPixels(kBarrelHalfHeight * 2.0f, kPixelsPerMeter), -angle, 0.25f, 0.25f,
         0.25f);
+
+    const float muzzleCenterX =
+        kPivotX + std::cos(angle) * (kBarrelLength - kMuzzleLength / 2.0f);
+    const float muzzleCenterY =
+        kPivotY + std::sin(angle) * (kBarrelLength - kMuzzleLength / 2.0f);
+    gfx::drawBox(
+        gfx::metersToPixels(muzzleCenterX, kPixelsPerMeter),
+        gfx::metersToPixelsY(muzzleCenterY, kWindowHeight, kPixelsPerMeter),
+        gfx::metersToPixels(kMuzzleLength, kPixelsPerMeter),
+        gfx::metersToPixels(kMuzzleHalfHeight * 2.0f, kPixelsPerMeter), -angle, 0.35f, 0.35f,
+        0.35f);
 }
 
 }  // namespace
@@ -123,6 +137,10 @@ int main() {
             drawBody(*ground);
             drawBody(*base);
             drawBarrel(aimAngle);
+            gfx::drawCircle(gfx::metersToPixels(kPivotX, kPixelsPerMeter),
+                            gfx::metersToPixelsY(kPivotY, kWindowHeight, kPixelsPerMeter),
+                            gfx::metersToPixels(kPivotRadius, kPixelsPerMeter), 0.45f, 0.45f,
+                            0.45f);
             window.swapBuffers();
             window.pollEvents();
         }
