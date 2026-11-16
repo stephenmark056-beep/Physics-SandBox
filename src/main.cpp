@@ -8,6 +8,7 @@
 #include <iostream>
 #include <numbers>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <box2d/box2d.h>
@@ -50,8 +51,15 @@ constexpr float kTowerHalfSize = 0.4f;
 constexpr float kTowerDensity = 1.0f;
 constexpr int kTowerColumns = 3;
 constexpr int kTowerRows = 5;
+constexpr float kKnockDistance = 0.3f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
+
+struct TowerBlock {
+    b2Body* body;
+    b2Vec2 startPosition;
+    bool knocked;
+};
 
 b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight) {
     b2BodyDef bodyDef;
@@ -173,16 +181,20 @@ int main() {
         b2Body* base = createStaticBox(world, kPivotX, kPivotY - kBaseHalfHeight,
                                        kBaseHalfWidth, kBaseHalfHeight);
 
-        std::vector<b2Body*> towerBlocks;
+        std::vector<TowerBlock> towerBlocks;
         const float groundTopY = kGroundY + kGroundHalfHeight;
         for (int row = 0; row < kTowerRows; ++row) {
             for (int column = 0; column < kTowerColumns; ++column) {
                 const float x = kTowerLeftX + column * 2.0f * kTowerHalfSize;
                 const float y =
                     groundTopY + kTowerHalfSize + row * 2.0f * kTowerHalfSize;
-                towerBlocks.push_back(createTowerBlock(world, x, y));
+                b2Body* body = createTowerBlock(world, x, y);
+                towerBlocks.push_back({body, body->GetPosition(), false});
             }
         }
+
+        int knockedCount = 0;
+        window.setTitle("knocked: 0/" + std::to_string(static_cast<int>(towerBlocks.size())));
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         double previousTime = glfwGetTime();
@@ -208,6 +220,22 @@ int main() {
                 accumulator -= kStepDt;
             }
 
+            bool knockedCountChanged = false;
+            for (TowerBlock& block : towerBlocks) {
+                if (!block.knocked) {
+                    const b2Vec2 displacement = block.body->GetPosition() - block.startPosition;
+                    if (displacement.LengthSquared() >= kKnockDistance * kKnockDistance) {
+                        block.knocked = true;
+                        ++knockedCount;
+                        knockedCountChanged = true;
+                    }
+                }
+            }
+            if (knockedCountChanged) {
+                window.setTitle("knocked: " + std::to_string(knockedCount) + "/" +
+                                std::to_string(static_cast<int>(towerBlocks.size())));
+            }
+
             double mouseX = 0.0;
             double mouseY = 0.0;
             window.getCursorPosition(mouseX, mouseY);
@@ -222,11 +250,13 @@ int main() {
             glClear(GL_COLOR_BUFFER_BIT);
             drawBody(*ground);
             drawBody(*base);
-            for (const b2Body* block : towerBlocks) {
-                if (block->IsAwake()) {
-                    drawBody(*block, 1.0f, 0.45f, 0.1f);
+            for (const TowerBlock& block : towerBlocks) {
+                if (block.knocked) {
+                    drawBody(*block.body, 0.1f, 0.9f, 0.2f);
+                } else if (block.body->IsAwake()) {
+                    drawBody(*block.body, 1.0f, 0.45f, 0.1f);
                 } else {
-                    drawBody(*block, 0.55f, 0.22f, 0.05f);
+                    drawBody(*block.body, 0.55f, 0.22f, 0.05f);
                 }
             }
             drawBarrel(aimAngle);
