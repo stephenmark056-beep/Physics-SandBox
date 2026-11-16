@@ -74,6 +74,12 @@ struct TowerBlock {
     bool knocked;
 };
 
+enum class GameState {
+    playing,
+    win,
+    lose,
+};
+
 b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight) {
     b2BodyDef bodyDef;
     bodyDef.type = b2_staticBody;
@@ -108,6 +114,7 @@ b2Body* createCannonball(b2World& world, const b2Vec2& position) {
     bodyDef.type = b2_dynamicBody;
     bodyDef.position = position;
     bodyDef.bullet = true;
+    bodyDef.angularDamping = 0.5f;
     b2Body* body = world.CreateBody(&bodyDef);
 
     b2CircleShape shape;
@@ -227,10 +234,32 @@ void drawAmmo(int shotsLeft) {
     }
 }
 
-void updateWindowTitle(const gfx::Window& window, int knockedCount, int shotsLeft) {
-    window.setTitle("knocked: " + std::to_string(knockedCount) + "/" +
-                    std::to_string(kTowerColumns * kTowerRows) + " | shots left: " +
-                    std::to_string(shotsLeft));
+bool isSettled(const std::vector<TowerBlock>& towerBlocks,
+               const std::vector<b2Body*>& cannonballs) {
+    for (const TowerBlock& block : towerBlocks) {
+        if (block.body->IsAwake()) {
+            return false;
+        }
+    }
+    for (const b2Body* ball : cannonballs) {
+        if (ball->IsAwake()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void updateWindowTitle(const gfx::Window& window, int knockedCount, int shotsLeft,
+                       GameState gameState) {
+    std::string title = "knocked: " + std::to_string(knockedCount) + "/" +
+                        std::to_string(kTowerColumns * kTowerRows) + " | shots left: " +
+                        std::to_string(shotsLeft);
+    if (gameState == GameState::win) {
+        title += " WIN";
+    } else if (gameState == GameState::lose) {
+        title += " LOSE";
+    }
+    window.setTitle(title);
 }
 
 }  // namespace
@@ -264,7 +293,8 @@ int main() {
 
         int knockedCount = 0;
         int shotsLeft = kMaxShots;
-        updateWindowTitle(window, knockedCount, shotsLeft);
+        GameState gameState = GameState::playing;
+        updateWindowTitle(window, knockedCount, shotsLeft, gameState);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         double previousTime = glfwGetTime();
@@ -276,7 +306,9 @@ int main() {
             gfx::processInput(window);
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
             const bool mouseReleased = wasMouseDown && !mouseDown;
-            const bool canCharge = mouseDown && shotsLeft > 0;
+            const GameState previousGameState = gameState;
+            const bool canCharge =
+                mouseDown && shotsLeft > 0 && gameState == GameState::playing;
 
             const double currentTime = glfwGetTime();
             const float elapsedTime = static_cast<float>(currentTime - previousTime);
@@ -286,7 +318,7 @@ int main() {
             if (canCharge) {
                 power = std::min(kMaxPower, power + kChargeRate * elapsedTime);
             } else {
-                if (mouseReleased && shotsLeft > 0) {
+                if (mouseReleased && shotsLeft > 0 && gameState == GameState::playing) {
                     launchPower = power;
                 }
                 power = kMinPower;
@@ -324,6 +356,9 @@ int main() {
                     }
                 }
             }
+            if (knockedCount == kTowerColumns * kTowerRows) {
+                gameState = GameState::win;
+            }
             double mouseX = 0.0;
             double mouseY = 0.0;
             window.getCursorPosition(mouseX, mouseY);
@@ -336,7 +371,7 @@ int main() {
             const float aimAngle = std::clamp(std::atan2(dy, dx), 0.0f, kMaxAimAngle);
 
             bool shotFired = false;
-            if (mouseReleased && shotsLeft > 0) {
+            if (mouseReleased && shotsLeft > 0 && gameState == GameState::playing) {
                 const b2Vec2 muzzlePosition(
                     kPivotX + std::cos(aimAngle) * kBarrelLength,
                     kPivotY + std::sin(aimAngle) * kBarrelLength);
@@ -351,8 +386,12 @@ int main() {
                 shotFired = true;
             }
             wasMouseDown = mouseDown;
-            if (knockedCountChanged || shotFired) {
-                updateWindowTitle(window, knockedCount, shotsLeft);
+            if (gameState == GameState::playing && shotsLeft == 0 &&
+                isSettled(towerBlocks, cannonballs)) {
+                gameState = GameState::lose;
+            }
+            if (knockedCountChanged || shotFired || gameState != previousGameState) {
+                updateWindowTitle(window, knockedCount, shotsLeft, gameState);
             }
 
             glClear(GL_COLOR_BUFFER_BIT);
