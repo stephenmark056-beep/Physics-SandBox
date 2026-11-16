@@ -41,6 +41,9 @@ constexpr float kMuzzlePointSize = 0.2f;
 constexpr float kPivotRadius = 0.3f;
 constexpr float kCannonballRadius = 0.2f;
 constexpr float kCannonballDensity = 3.0f;
+constexpr float kWorldWidth = kWindowWidth / kPixelsPerMeter;
+constexpr float kWorldHeight = kWindowHeight / kPixelsPerMeter;
+constexpr float kRemoveBelowY = -10.0f;
 constexpr float kMaxAimAngle = std::numbers::pi_v<float> / 2.0f - 0.01f;
 constexpr float kMinPower = 20.0f;
 constexpr float kMaxPower = 40.0f;
@@ -245,6 +248,21 @@ int main() {
             while (accumulator >= kStepDt) {
                 world.Step(kStepDt, 8, 3);
                 accumulator -= kStepDt;
+            }
+
+            for (auto ball = cannonballs.begin(); ball != cannonballs.end();) {
+                const b2Vec2 position = (*ball)->GetPosition();
+                const bool outsideWorld =
+                    position.x + kCannonballRadius < 0.0f ||
+                    position.x - kCannonballRadius > kWorldWidth ||
+                    position.y - kCannonballRadius > kWorldHeight ||
+                    position.y < kRemoveBelowY;
+                if (outsideWorld) {
+                    world.DestroyBody(*ball);
+                    ball = cannonballs.erase(ball);
+                } else {
+                    ++ball;
+                }
             }
 
             bool knockedCountChanged = false;
