@@ -64,6 +64,7 @@ constexpr float kAmmoSquareY = 24.0f;
 constexpr float kTowerLeftX = 19.0f;
 constexpr float kTowerHalfSize = 0.4f;
 constexpr float kTowerDensity = 1.0f;
+constexpr float kBlockBreakImpulse = 2.0f;
 constexpr int kTowerColumns = 3;
 constexpr int kTowerRows = 5;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
@@ -120,6 +121,22 @@ public:
         }
     }
 
+    void PostSolve(b2Contact* contact, const b2ContactImpulse* impulse) override {
+        b2Body* bodyA = contact->GetFixtureA()->GetBody();
+        b2Body* bodyB = contact->GetFixtureB()->GetBody();
+        TowerBlock* blockA = findBlock(bodyA);
+        TowerBlock* blockB = findBlock(bodyB);
+
+        if (blockA != nullptr && isCannonball(bodyB) &&
+            getNormalImpulse(*impulse) >= kBlockBreakImpulse) {
+            queueRemoval(bodyA);
+        }
+        if (blockB != nullptr && isCannonball(bodyA) &&
+            getNormalImpulse(*impulse) >= kBlockBreakImpulse) {
+            queueRemoval(bodyB);
+        }
+    }
+
     bool processPendingContacts() {
         bool scoreChanged = false;
         bool progress;
@@ -162,6 +179,14 @@ public:
     }
 
 private:
+    float getNormalImpulse(const b2ContactImpulse& impulse) const {
+        float totalImpulse = 0.0f;
+        for (int i = 0; i < impulse.count; ++i) {
+            totalImpulse += impulse.normalImpulses[i];
+        }
+        return totalImpulse;
+    }
+
     void queueRemoval(b2Body* body) {
         if (body->GetType() != b2_staticBody &&
             std::find(pendingRemovals_.begin(), pendingRemovals_.end(), body) ==
