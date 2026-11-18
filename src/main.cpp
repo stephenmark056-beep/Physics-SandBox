@@ -44,7 +44,7 @@ constexpr float kCannonballRadius = 0.2f;
 constexpr float kCannonballDensity = 3.0f;
 constexpr float kWorldWidth = kWindowWidth / kPixelsPerMeter;
 constexpr float kWorldHeight = kWindowHeight / kPixelsPerMeter;
-constexpr float kRemoveBelowY = -10.0f;
+constexpr float kOutOfBoundsZoneThickness = 1.0f;
 constexpr float kArcTimeStep = 0.02f;
 constexpr float kArcDotRadius = 0.06f;
 constexpr int kMaxArcDots = 500;
@@ -73,13 +73,26 @@ struct TowerBlock {
     bool knocked;
 };
 
-class TowerContactListener final : public b2ContactListener {
+class GameContactListener final : public b2ContactListener {
 public:
-    TowerContactListener(std::vector<TowerBlock>& towerBlocks,
-                         const std::vector<b2Body*>& cannonballs, int& knockedCount)
-        : towerBlocks_(towerBlocks), cannonballs_(cannonballs), knockedCount_(knockedCount) {}
+    GameContactListener(b2Body* removalZone, std::vector<TowerBlock>& towerBlocks,
+                        const std::vector<b2Body*>& cannonballs, int& knockedCount)
+        : removalZone_(removalZone),
+          towerBlocks_(towerBlocks),
+          cannonballs_(cannonballs),
+          knockedCount_(knockedCount) {}
 
     void BeginContact(b2Contact* contact) override {
+        b2Body* bodyA = contact->GetFixtureA()->GetBody();
+        b2Body* bodyB = contact->GetFixtureB()->GetBody();
+        if (bodyA == removalZone_) {
+            queueRemoval(bodyB);
+            return;
+        }
+        if (bodyB == removalZone_) {
+            queueRemoval(bodyA);
+            return;
+        }
         recordContact(contact);
     }
 
@@ -136,11 +149,26 @@ public:
         return scoreChanged;
     }
 
-    void clearPendingContacts() {
+    std::vector<b2Body*> takePendingRemovals() {
+        std::vector<b2Body*> removals;
+        removals.swap(pendingRemovals_);
+        return removals;
+    }
+
+    void clearPendingEvents() {
         pendingContacts_.clear();
+        pendingRemovals_.clear();
     }
 
 private:
+    void queueRemoval(b2Body* body) {
+        if (body->GetType() != b2_staticBody &&
+            std::find(pendingRemovals_.begin(), pendingRemovals_.end(), body) ==
+                pendingRemovals_.end()) {
+            pendingRemovals_.push_back(body);
+        }
+    }
+
     void recordContact(b2Contact* contact) {
         pendingContacts_.emplace_back(contact->GetFixtureA()->GetBody(),
                                       contact->GetFixtureB()->GetBody());
@@ -169,10 +197,12 @@ private:
         return true;
     }
 
+    b2Body* removalZone_;
     std::vector<TowerBlock>& towerBlocks_;
     const std::vector<b2Body*>& cannonballs_;
     int& knockedCount_;
     std::vector<std::pair<b2Body*, b2Body*>> pendingContacts_;
+    std::vector<b2Body*> pendingRemovals_;
 };
 
 enum class GameState {
@@ -191,6 +221,36 @@ b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float
     shape.SetAsBox(halfWidth, halfHeight);
     body->CreateFixture(&shape, 0.0f);
     return body;
+}
+
+b2Body* createOutOfBoundsZone(b2World& world) {
+    b2BodyDef bodyDef;
+    bodyDef.type = b2_staticBody;
+    b2Body* zone = world.CreateBody(&bodyDef);
+
+    const float halfThickness = kOutOfBoundsZoneThickness / 2.0f;
+    const float halfWorldWidth = kWorldWidth / 2.0f;
+    const float halfWorldHeight = kWorldHeight / 2.0f;
+    const auto addSensorBox = [&](float centerX, float centerY, float halfWidth,
+                                  float halfHeight) {
+        b2PolygonShape shape;
+        shape.SetAsBox(halfWidth, halfHeight, {centerX, centerY}, 0.0f);
+
+        b2FixtureDef fixtureDef;
+        fixtureDef.shape = &shape;
+        fixtureDef.isSensor = true;
+        zone->CreateFixture(&fixtureDef);
+    };
+
+    addSensorBox(-halfThickness, halfWorldHeight, halfThickness,
+                 halfWorldHeight + kOutOfBoundsZoneThickness);
+    addSensorBox(kWorldWidth + halfThickness, halfWorldHeight, halfThickness,
+                 halfWorldHeight + kOutOfBoundsZoneThickness);
+    addSensorBox(halfWorldWidth, -halfThickness,
+                 halfWorldWidth + kOutOfBoundsZoneThickness, halfThickness);
+    addSensorBox(halfWorldWidth, kWorldHeight + halfThickness,
+                 halfWorldWidth + kOutOfBoundsZoneThickness, halfThickness);
+    return zone;
 }
 
 b2Body* createTowerBlock(b2World& world, float x, float y) {
@@ -392,12 +452,13 @@ int main() {
                                          kGroundHalfHeight);
         b2Body* base = createStaticBox(world, kPivotX, kPivotY - kBaseHalfHeight,
                                        kBaseHalfWidth, kBaseHalfHeight);
+        b2Body* removalZone = createOutOfBoundsZone(world);
 
         std::vector<TowerBlock> towerBlocks = createTowerBlocks(world);
         std::vector<b2Body*> cannonballs;
 
         int knockedCount = 0;
-        TowerContactListener contactListener(towerBlocks, cannonballs, knockedCount);
+        GameContactListener contactListener(removalZone, towerBlocks, cannonballs, knockedCount);
         world.SetContactListener(&contactListener);
         int shotsLeft = kMaxShots;
         GameState gameState = GameState::playing;
@@ -416,7 +477,7 @@ int main() {
             const bool resetPressed = rDown && !rWasDown;
             rWasDown = rDown;
             if (resetPressed) {
-                contactListener.clearPendingContacts();
+                contactListener.clearPendingEvents();
                 for (const TowerBlock& block : towerBlocks) {
                     world.DestroyBody(block.body);
                 }
@@ -460,22 +521,18 @@ int main() {
                 world.Step(kStepDt, 8, 3);
                 knockedCountChanged =
                     contactListener.processPendingContacts() || knockedCountChanged;
-                accumulator -= kStepDt;
-            }
-
-            for (auto ball = cannonballs.begin(); ball != cannonballs.end();) {
-                const b2Vec2 position = (*ball)->GetPosition();
-                const bool outsideWorld =
-                    position.x + kCannonballRadius < 0.0f ||
-                    position.x - kCannonballRadius > kWorldWidth ||
-                    position.y - kCannonballRadius > kWorldHeight ||
-                    position.y < kRemoveBelowY;
-                if (outsideWorld) {
-                    world.DestroyBody(*ball);
-                    ball = cannonballs.erase(ball);
-                } else {
-                    ++ball;
+                for (b2Body* body : contactListener.takePendingRemovals()) {
+                    world.DestroyBody(body);
+                    towerBlocks.erase(
+                        std::remove_if(towerBlocks.begin(), towerBlocks.end(),
+                                       [body](const TowerBlock& block) {
+                                           return block.body == body;
+                                       }),
+                        towerBlocks.end());
+                    cannonballs.erase(std::remove(cannonballs.begin(), cannonballs.end(), body),
+                                      cannonballs.end());
                 }
+                accumulator -= kStepDt;
             }
 
             if (knockedCount == kTowerColumns * kTowerRows) {
