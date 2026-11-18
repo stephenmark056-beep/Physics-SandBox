@@ -9,6 +9,7 @@
 #include <numbers>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <box2d/box2d.h>
@@ -64,14 +65,114 @@ constexpr float kTowerHalfSize = 0.4f;
 constexpr float kTowerDensity = 1.0f;
 constexpr int kTowerColumns = 3;
 constexpr int kTowerRows = 5;
-constexpr float kKnockDistance = 0.3f;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
 
 struct TowerBlock {
     b2Body* body;
-    b2Vec2 startPosition;
     bool knocked;
+};
+
+class TowerContactListener final : public b2ContactListener {
+public:
+    TowerContactListener(std::vector<TowerBlock>& towerBlocks,
+                         const std::vector<b2Body*>& cannonballs, int& knockedCount)
+        : towerBlocks_(towerBlocks), cannonballs_(cannonballs), knockedCount_(knockedCount) {}
+
+    void BeginContact(b2Contact* contact) override {
+        recordContact(contact);
+    }
+
+    void PreSolve(b2Contact* contact, const b2Manifold*) override {
+        b2Body* bodyA = contact->GetFixtureA()->GetBody();
+        b2Body* bodyB = contact->GetFixtureB()->GetBody();
+        if (findBlock(bodyA) == nullptr || findBlock(bodyB) == nullptr) {
+            return;
+        }
+
+        // Existing block contacts also need to report a hit when a block is driven into another.
+        b2WorldManifold worldManifold;
+        contact->GetWorldManifold(&worldManifold);
+        const b2Manifold* manifold = contact->GetManifold();
+        for (int i = 0; i < manifold->pointCount; ++i) {
+            const b2Vec2 velocityA =
+                bodyA->GetLinearVelocityFromWorldPoint(worldManifold.points[i]);
+            const b2Vec2 velocityB =
+                bodyB->GetLinearVelocityFromWorldPoint(worldManifold.points[i]);
+            if (b2Dot(velocityB - velocityA, worldManifold.normal) < -b2_epsilon) {
+                recordContact(contact);
+                return;
+            }
+        }
+    }
+
+    bool processPendingContacts() {
+        bool scoreChanged = false;
+        bool progress;
+        do {
+            progress = false;
+            for (const auto& [bodyA, bodyB] : pendingContacts_) {
+                TowerBlock* blockA = findBlock(bodyA);
+                TowerBlock* blockB = findBlock(bodyB);
+
+                if (blockA != nullptr && isCannonball(bodyB)) {
+                    scoreChanged |= markKnocked(*blockA, progress);
+                }
+                if (blockB != nullptr && isCannonball(bodyA)) {
+                    scoreChanged |= markKnocked(*blockB, progress);
+                }
+                if (blockA != nullptr && blockB != nullptr) {
+                    if (blockA->knocked) {
+                        scoreChanged |= markKnocked(*blockB, progress);
+                    }
+                    if (blockB->knocked) {
+                        scoreChanged |= markKnocked(*blockA, progress);
+                    }
+                }
+            }
+        } while (progress);
+
+        pendingContacts_.clear();
+        return scoreChanged;
+    }
+
+    void clearPendingContacts() {
+        pendingContacts_.clear();
+    }
+
+private:
+    void recordContact(b2Contact* contact) {
+        pendingContacts_.emplace_back(contact->GetFixtureA()->GetBody(),
+                                      contact->GetFixtureB()->GetBody());
+    }
+
+    TowerBlock* findBlock(b2Body* body) {
+        for (TowerBlock& block : towerBlocks_) {
+            if (block.body == body) {
+                return &block;
+            }
+        }
+        return nullptr;
+    }
+
+    bool isCannonball(const b2Body* body) const {
+        return std::find(cannonballs_.begin(), cannonballs_.end(), body) != cannonballs_.end();
+    }
+
+    bool markKnocked(TowerBlock& block, bool& progress) {
+        if (block.knocked) {
+            return false;
+        }
+        block.knocked = true;
+        ++knockedCount_;
+        progress = true;
+        return true;
+    }
+
+    std::vector<TowerBlock>& towerBlocks_;
+    const std::vector<b2Body*>& cannonballs_;
+    int& knockedCount_;
+    std::vector<std::pair<b2Body*, b2Body*>> pendingContacts_;
 };
 
 enum class GameState {
@@ -117,7 +218,7 @@ std::vector<TowerBlock> createTowerBlocks(b2World& world) {
             const float x = kTowerLeftX + column * 2.0f * kTowerHalfSize;
             const float y = groundTopY + kTowerHalfSize + row * 2.0f * kTowerHalfSize;
             b2Body* body = createTowerBlock(world, x, y);
-            blocks.push_back({body, body->GetPosition(), false});
+            blocks.push_back({body, false});
         }
     }
     return blocks;
@@ -296,6 +397,8 @@ int main() {
         std::vector<b2Body*> cannonballs;
 
         int knockedCount = 0;
+        TowerContactListener contactListener(towerBlocks, cannonballs, knockedCount);
+        world.SetContactListener(&contactListener);
         int shotsLeft = kMaxShots;
         GameState gameState = GameState::playing;
         updateWindowTitle(window, knockedCount, shotsLeft, gameState);
@@ -313,6 +416,7 @@ int main() {
             const bool resetPressed = rDown && !rWasDown;
             rWasDown = rDown;
             if (resetPressed) {
+                contactListener.clearPendingContacts();
                 for (const TowerBlock& block : towerBlocks) {
                     world.DestroyBody(block.body);
                 }
@@ -350,9 +454,12 @@ int main() {
                 power = kMinPower;
             }
 
+            bool knockedCountChanged = false;
             accumulator += frameTime;
             while (accumulator >= kStepDt) {
                 world.Step(kStepDt, 8, 3);
+                knockedCountChanged =
+                    contactListener.processPendingContacts() || knockedCountChanged;
                 accumulator -= kStepDt;
             }
 
@@ -371,17 +478,6 @@ int main() {
                 }
             }
 
-            bool knockedCountChanged = false;
-            for (TowerBlock& block : towerBlocks) {
-                if (!block.knocked) {
-                    const b2Vec2 displacement = block.body->GetPosition() - block.startPosition;
-                    if (displacement.LengthSquared() >= kKnockDistance * kKnockDistance) {
-                        block.knocked = true;
-                        ++knockedCount;
-                        knockedCountChanged = true;
-                    }
-                }
-            }
             if (knockedCount == kTowerColumns * kTowerRows) {
                 gameState = GameState::win;
             }
