@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include <box2d/b2_distance.h>
 #include <box2d/box2d.h>
 
 #include "core/coordinates.h"
@@ -364,27 +365,79 @@ void drawMuzzlePoint(float angle) {
                  1.0f, 0.9f, 0.0f);
 }
 
-void drawArcPreview(float speed, float angle, float gravityY) {
+class ArcShapeCastQuery final : public b2QueryCallback {
+public:
+    ArcShapeCastQuery(const b2Vec2& start, const b2Vec2& end)
+        : start_(start), translation_(end - start) {
+        projectileShape_.m_radius = kCannonballRadius;
+    }
+
+    bool ReportFixture(b2Fixture* fixture) override {
+        b2Body* body = fixture->GetBody();
+        const b2Shape* shape = fixture->GetShape();
+        for (int childIndex = 0; childIndex < shape->GetChildCount(); ++childIndex) {
+            b2ShapeCastInput input{};
+            input.proxyA.Set(shape, childIndex);
+            input.proxyB.Set(&projectileShape_, 0);
+            input.transformA = body->GetTransform();
+            input.transformB.Set(start_, 0.0f);
+            input.translationB = translation_;
+
+            b2ShapeCastOutput output;
+            if (b2ShapeCast(&output, &input) && (!hasHit_ || output.lambda < hitFraction_)) {
+                hasHit_ = true;
+                hitFraction_ = output.lambda;
+            }
+        }
+        return true;
+    }
+
+    bool hasHit() const {
+        return hasHit_;
+    }
+
+    b2Vec2 hitPosition() const {
+        return start_ + hitFraction_ * translation_;
+    }
+
+private:
+    b2CircleShape projectileShape_;
+    b2Vec2 start_;
+    b2Vec2 translation_;
+    float hitFraction_ = 1.0f;
+    bool hasHit_ = false;
+};
+
+void drawArcPreview(const b2World& world, float speed, float angle, float gravityY) {
     const b2Vec2 start(kPivotX + std::cos(angle) * kBarrelLength,
                        kPivotY + std::sin(angle) * kBarrelLength);
     const float velocityX = speed * std::cos(angle);
     const float velocityY = speed * std::sin(angle);
-    const float groundContactY = kGroundY + kGroundHalfHeight + kCannonballRadius;
+    b2Vec2 previousPosition = start;
 
     for (int i = 1; i <= kMaxArcDots; ++i) {
         const float time = i * kArcTimeStep;
         const b2Vec2 position(start.x + velocityX * time,
                               start.y + velocityY * time +
                                   0.5f * gravityY * time * time);
-        if (position.x + kCannonballRadius >= kWorldWidth ||
-            position.y <= groundContactY) {
+        ArcShapeCastQuery query(previousPosition, position);
+        b2AABB bounds;
+        bounds.lowerBound.Set(b2Min(previousPosition.x, position.x) - kCannonballRadius,
+                              b2Min(previousPosition.y, position.y) - kCannonballRadius);
+        bounds.upperBound.Set(b2Max(previousPosition.x, position.x) + kCannonballRadius,
+                              b2Max(previousPosition.y, position.y) + kCannonballRadius);
+        world.QueryAABB(&query, bounds);
+
+        const b2Vec2 drawPosition = query.hasHit() ? query.hitPosition() : position;
+        gfx::drawCircle(gfx::metersToPixels(drawPosition.x, kPixelsPerMeter),
+                        gfx::metersToPixelsY(drawPosition.y, kWindowHeight, kPixelsPerMeter),
+                        gfx::metersToPixels(kArcDotRadius, kPixelsPerMeter), 1.0f, 1.0f,
+                        1.0f);
+        if (query.hasHit()) {
             break;
         }
 
-        gfx::drawCircle(gfx::metersToPixels(position.x, kPixelsPerMeter),
-                        gfx::metersToPixelsY(position.y, kWindowHeight, kPixelsPerMeter),
-                        gfx::metersToPixels(kArcDotRadius, kPixelsPerMeter), 1.0f, 1.0f,
-                        1.0f);
+        previousPosition = position;
     }
 }
 
@@ -585,7 +638,7 @@ int main() {
                     drawBody(*block.body, 0.55f, 0.22f, 0.05f);
                 }
             }
-            drawArcPreview(power, aimAngle, world.GetGravity().y);
+            drawArcPreview(world, power, aimAngle, world.GetGravity().y);
             drawBarrel(aimAngle);
             drawMuzzlePoint(aimAngle);
             gfx::drawCircle(gfx::metersToPixels(kPivotX, kPixelsPerMeter),
