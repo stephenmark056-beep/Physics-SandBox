@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
@@ -70,10 +71,42 @@ constexpr int kTowerRows = 5;
 constexpr float kMaxFrameTime = 1.0f / 30.0f;
 constexpr float kStepDt = 1.0f / 60.0f;
 
+constexpr std::uint16_t kGroundCategory = 0x0001;
+constexpr std::uint16_t kTowerCategory = 0x0002;
+constexpr std::uint16_t kBaseCategory = 0x0004;
+constexpr std::uint16_t kRemovalZoneCategory = 0x0008;
+constexpr std::uint16_t kNormalBallCategory = 0x0010;
+constexpr std::uint16_t kGhostBallCategory = 0x0020;
+constexpr std::uint16_t kAllCollisionCategories = 0xFFFF;
+constexpr std::uint16_t kGhostBallMask = kGroundCategory | kRemovalZoneCategory;
+
+enum class AmmoType {
+    normal,
+    ghost,
+};
+
 struct TowerBlock {
     b2Body* body;
     bool knocked;
 };
+
+b2Filter getAmmoFilter(AmmoType ammoType) {
+    b2Filter filter;
+    filter.categoryBits =
+        ammoType == AmmoType::ghost ? kGhostBallCategory : kNormalBallCategory;
+    filter.maskBits =
+        ammoType == AmmoType::ghost ? kGhostBallMask : kAllCollisionCategories;
+    return filter;
+}
+
+bool filtersAllowCollision(const b2Filter& projectileFilter, const b2Filter& fixtureFilter) {
+    return (projectileFilter.maskBits & fixtureFilter.categoryBits) != 0 &&
+           (fixtureFilter.maskBits & projectileFilter.categoryBits) != 0;
+}
+
+const char* ammoTypeName(AmmoType ammoType) {
+    return ammoType == AmmoType::ghost ? "ghost" : "normal";
+}
 
 class GameContactListener final : public b2ContactListener {
 public:
@@ -237,7 +270,8 @@ enum class GameState {
     lose,
 };
 
-b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight) {
+b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float halfHeight,
+                        std::uint16_t categoryBits) {
     b2BodyDef bodyDef;
     bodyDef.type = b2_staticBody;
     bodyDef.position.Set(x, y);
@@ -245,7 +279,10 @@ b2Body* createStaticBox(b2World& world, float x, float y, float halfWidth, float
 
     b2PolygonShape shape;
     shape.SetAsBox(halfWidth, halfHeight);
-    body->CreateFixture(&shape, 0.0f);
+    b2FixtureDef fixtureDef;
+    fixtureDef.shape = &shape;
+    fixtureDef.filter.categoryBits = categoryBits;
+    body->CreateFixture(&fixtureDef);
     return body;
 }
 
@@ -265,6 +302,7 @@ b2Body* createOutOfBoundsZone(b2World& world) {
         b2FixtureDef fixtureDef;
         fixtureDef.shape = &shape;
         fixtureDef.isSensor = true;
+        fixtureDef.filter.categoryBits = kRemovalZoneCategory;
         zone->CreateFixture(&fixtureDef);
     };
 
@@ -292,6 +330,7 @@ b2Body* createTowerBlock(b2World& world, float x, float y) {
     fixtureDef.shape = &shape;
     fixtureDef.density = kTowerDensity;
     fixtureDef.friction = 0.5f;
+    fixtureDef.filter.categoryBits = kTowerCategory;
     body->CreateFixture(&fixtureDef);
     return body;
 }
@@ -310,7 +349,7 @@ std::vector<TowerBlock> createTowerBlocks(b2World& world) {
     return blocks;
 }
 
-b2Body* createCannonball(b2World& world, const b2Vec2& position) {
+b2Body* createCannonball(b2World& world, const b2Vec2& position, AmmoType ammoType) {
     b2BodyDef bodyDef;
     bodyDef.type = b2_dynamicBody;
     bodyDef.position = position;
@@ -325,6 +364,7 @@ b2Body* createCannonball(b2World& world, const b2Vec2& position) {
     fixtureDef.shape = &shape;
     fixtureDef.density = kCannonballDensity;
     fixtureDef.friction = 0.3f;
+    fixtureDef.filter = getAmmoFilter(ammoType);
     body->CreateFixture(&fixtureDef);
     return body;
 }
@@ -392,12 +432,18 @@ void drawMuzzlePoint(float angle) {
 
 class ArcShapeCastQuery final : public b2QueryCallback {
 public:
-    ArcShapeCastQuery(const b2Vec2& start, const b2Vec2& end)
-        : start_(start), translation_(end - start) {
+    ArcShapeCastQuery(const b2Vec2& start, const b2Vec2& end, AmmoType ammoType)
+        : start_(start),
+          translation_(end - start),
+          projectileFilter_(getAmmoFilter(ammoType)) {
         projectileShape_.m_radius = kCannonballRadius;
     }
 
     bool ReportFixture(b2Fixture* fixture) override {
+        if (!filtersAllowCollision(projectileFilter_, fixture->GetFilterData())) {
+            return true;
+        }
+
         b2Body* body = fixture->GetBody();
         const b2Shape* shape = fixture->GetShape();
         for (int childIndex = 0; childIndex < shape->GetChildCount(); ++childIndex) {
@@ -429,11 +475,13 @@ private:
     b2CircleShape projectileShape_;
     b2Vec2 start_;
     b2Vec2 translation_;
+    b2Filter projectileFilter_;
     float hitFraction_ = 1.0f;
     bool hasHit_ = false;
 };
 
-void drawArcPreview(const b2World& world, float speed, float angle, float gravityY) {
+void drawArcPreview(const b2World& world, float speed, float angle, float gravityY,
+                    AmmoType ammoType) {
     const b2Vec2 start(kPivotX + std::cos(angle) * kBarrelLength,
                        kPivotY + std::sin(angle) * kBarrelLength);
     const float velocityX = speed * std::cos(angle);
@@ -445,7 +493,7 @@ void drawArcPreview(const b2World& world, float speed, float angle, float gravit
         const b2Vec2 position(start.x + velocityX * time,
                               start.y + velocityY * time +
                                   0.5f * gravityY * time * time);
-        ArcShapeCastQuery query(previousPosition, position);
+        ArcShapeCastQuery query(previousPosition, position, ammoType);
         b2AABB bounds;
         bounds.lowerBound.Set(b2Min(previousPosition.x, position.x) - kCannonballRadius,
                               b2Min(previousPosition.y, position.y) - kCannonballRadius);
@@ -503,10 +551,10 @@ bool isSettled(const std::vector<TowerBlock>& towerBlocks,
 }
 
 void updateWindowTitle(const gfx::Window& window, int knockedCount, int shotsLeft,
-                       GameState gameState) {
+                       GameState gameState, AmmoType ammoType) {
     std::string title = "knocked: " + std::to_string(knockedCount) + "/" +
                         std::to_string(kTowerColumns * kTowerRows) + " | shots left: " +
-                        std::to_string(shotsLeft);
+                        std::to_string(shotsLeft) + " | ammo: " + ammoTypeName(ammoType);
     if (gameState == GameState::win) {
         title += " WIN";
     } else if (gameState == GameState::lose) {
@@ -527,9 +575,9 @@ int main() {
 
         b2World world({0.0f, -9.8f});
         b2Body* ground = createStaticBox(world, kGroundX, kGroundY, kGroundHalfWidth,
-                                         kGroundHalfHeight);
+                                         kGroundHalfHeight, kGroundCategory);
         b2Body* base = createStaticBox(world, kPivotX, kPivotY - kBaseHalfHeight,
-                                       kBaseHalfWidth, kBaseHalfHeight);
+                                       kBaseHalfWidth, kBaseHalfHeight, kBaseCategory);
         b2Body* removalZone = createOutOfBoundsZone(world);
 
         std::vector<TowerBlock> towerBlocks = createTowerBlocks(world);
@@ -540,7 +588,8 @@ int main() {
         world.SetContactListener(&contactListener);
         int shotsLeft = kMaxShots;
         GameState gameState = GameState::playing;
-        updateWindowTitle(window, knockedCount, shotsLeft, gameState);
+        AmmoType selectedAmmo = AmmoType::normal;
+        updateWindowTitle(window, knockedCount, shotsLeft, gameState, selectedAmmo);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         double previousTime = glfwGetTime();
@@ -548,9 +597,25 @@ int main() {
         float accumulator = 0.0f;
         bool wasMouseDown = false;
         bool rWasDown = false;
+        bool wasKey1Down = false;
+        bool wasKey2Down = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
+            bool ammoChanged = false;
+            const bool key1Down = window.isKeyPressed(GLFW_KEY_1);
+            const bool key2Down = window.isKeyPressed(GLFW_KEY_2);
+            if (key1Down && !wasKey1Down && selectedAmmo != AmmoType::normal) {
+                selectedAmmo = AmmoType::normal;
+                ammoChanged = true;
+            }
+            if (key2Down && !wasKey2Down && selectedAmmo != AmmoType::ghost) {
+                selectedAmmo = AmmoType::ghost;
+                ammoChanged = true;
+            }
+            wasKey1Down = key1Down;
+            wasKey2Down = key2Down;
+
             const bool rDown = window.isKeyPressed(GLFW_KEY_R);
             const bool resetPressed = rDown && !rWasDown;
             rWasDown = rDown;
@@ -570,7 +635,7 @@ int main() {
                 power = kMinPower;
                 accumulator = 0.0f;
                 wasMouseDown = false;
-                updateWindowTitle(window, knockedCount, shotsLeft, gameState);
+                updateWindowTitle(window, knockedCount, shotsLeft, gameState, selectedAmmo);
             }
 
             const bool mouseDown = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
@@ -632,7 +697,7 @@ int main() {
                 const b2Vec2 muzzlePosition(
                     kPivotX + std::cos(aimAngle) * kBarrelLength,
                     kPivotY + std::sin(aimAngle) * kBarrelLength);
-                b2Body* ball = createCannonball(world, muzzlePosition);
+                b2Body* ball = createCannonball(world, muzzlePosition, selectedAmmo);
                 const float impulseMagnitude = ball->GetMass() * launchPower;
                 ball->ApplyLinearImpulseToCenter(
                     {impulseMagnitude * std::cos(aimAngle),
@@ -647,8 +712,9 @@ int main() {
                 isSettled(towerBlocks, cannonballs)) {
                 gameState = GameState::lose;
             }
-            if (knockedCountChanged || shotFired || gameState != previousGameState) {
-                updateWindowTitle(window, knockedCount, shotsLeft, gameState);
+            if (knockedCountChanged || shotFired || ammoChanged ||
+                gameState != previousGameState) {
+                updateWindowTitle(window, knockedCount, shotsLeft, gameState, selectedAmmo);
             }
 
             glClear(GL_COLOR_BUFFER_BIT);
@@ -663,7 +729,7 @@ int main() {
                     drawBody(*block.body, 0.55f, 0.22f, 0.05f);
                 }
             }
-            drawArcPreview(world, power, aimAngle, world.GetGravity().y);
+            drawArcPreview(world, power, aimAngle, world.GetGravity().y, selectedAmmo);
             drawBarrel(aimAngle);
             drawMuzzlePoint(aimAngle);
             gfx::drawCircle(gfx::metersToPixels(kPivotX, kPixelsPerMeter),

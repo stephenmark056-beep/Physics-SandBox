@@ -1,9 +1,8 @@
 # Physics Sandbox
 
-A C++20 and OpenGL starter for physics projects on Windows. It opens an 800x600
-window with a teal background, a gray ground bar, and a gray cannon base at the
-left. The ground and base are static Box2D bodies; their fixtures define the
-geometry used for rendering. Box2D v2.4.2 is vendored in the project.
+A C++20, OpenGL, and Box2D physics sandbox for Windows. It opens an 800x600
+window with a cannon, ground, and a tower of blocks. Box2D v2.4.2 handles
+projectile physics, collision filtering, and contact-based gameplay.
 
 GLFW, GLAD and Box2D are vendored, so nothing needs to be installed beyond the
 compiler.
@@ -24,13 +23,20 @@ compiler.
 2. Run the `Build Main` task (`Ctrl+Shift+B`).
 3. Run `main.exe` from the repo folder. Press `Esc` to close it.
 
+## Controls
+
+- Hold and release the left mouse button to charge and fire.
+- Press `1` to select a normal ball or `2` to select a ghost ball. Ghost balls
+  pass through blocks but collide with the ground.
+- Press `R` to reset the game.
+
 ## Box2D library
 
 `lib/libbox2d.a` is not committed, because a static C++ library built with one
 GCC version can fail to link with another. Each machine builds its own. To
 build it after switching compilers or editing `src/box2d/`, run the
-`Build Box2D library` task. The empty window does not link Box2D; the library
-is kept for future physics work.
+`Build Box2D library` task. The `Build Main` task builds the library if it is
+missing and links it into the game.
 
 ## Project structure
 
@@ -39,7 +45,7 @@ is kept for future physics work.
 glfw3.dll                 GLFW runtime, must sit next to main.exe
 lib/libglfw3dll.a         GLFW import library
 src/
-  main.cpp                Box2D ground and cannon base, background and loop
+  main.cpp                cannon, tower, ammo, Box2D contacts and game loop
   draw.h/.cpp             reusable box and line renderer
   glad.c                  vendored GLAD loader
   core/                   GLFW context, window and keyboard input (gfx namespace)
