@@ -28,6 +28,8 @@ compiler.
 - Hold and release the left mouse button to charge and fire.
 - Press `1` to select a normal ball or `2` to select a ghost ball. Ghost balls
   pass through blocks but collide with the ground.
+- Press `3` to select a bomb. It explodes on its first solid contact and pushes
+  nearby blocks away.
 - Press `R` to reset the game.
 
 ## Box2D library

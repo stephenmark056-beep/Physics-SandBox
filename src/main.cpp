@@ -44,6 +44,8 @@ constexpr float kMuzzlePointSize = 0.2f;
 constexpr float kPivotRadius = 0.3f;
 constexpr float kCannonballRadius = 0.2f;
 constexpr float kCannonballDensity = 3.0f;
+constexpr float kBombBlastRadius = 2.5f;
+constexpr float kBombMaxImpulse = 8.0f;
 constexpr float kWorldWidth = kWindowWidth / kPixelsPerMeter;
 constexpr float kWorldHeight = kWindowHeight / kPixelsPerMeter;
 constexpr float kOutOfBoundsZoneThickness = 1.0f;
@@ -77,12 +79,14 @@ constexpr std::uint16_t kBaseCategory = 0x0004;
 constexpr std::uint16_t kRemovalZoneCategory = 0x0008;
 constexpr std::uint16_t kNormalBallCategory = 0x0010;
 constexpr std::uint16_t kGhostBallCategory = 0x0020;
+constexpr std::uint16_t kBombCategory = 0x0040;
 constexpr std::uint16_t kAllCollisionCategories = 0xFFFF;
 constexpr std::uint16_t kGhostBallMask = kGroundCategory | kRemovalZoneCategory;
 
 enum class AmmoType {
     normal,
     ghost,
+    bomb,
 };
 
 struct TowerBlock {
@@ -93,7 +97,9 @@ struct TowerBlock {
 b2Filter getAmmoFilter(AmmoType ammoType) {
     b2Filter filter;
     filter.categoryBits =
-        ammoType == AmmoType::ghost ? kGhostBallCategory : kNormalBallCategory;
+        ammoType == AmmoType::normal ? kNormalBallCategory
+        : ammoType == AmmoType::ghost ? kGhostBallCategory
+                                      : kBombCategory;
     filter.maskBits =
         ammoType == AmmoType::ghost ? kGhostBallMask : kAllCollisionCategories;
     return filter;
@@ -105,7 +111,10 @@ bool filtersAllowCollision(const b2Filter& projectileFilter, const b2Filter& fix
 }
 
 const char* ammoTypeName(AmmoType ammoType) {
-    return ammoType == AmmoType::ghost ? "ghost" : "normal";
+    if (ammoType == AmmoType::ghost) {
+        return "ghost";
+    }
+    return ammoType == AmmoType::bomb ? "bomb" : "normal";
 }
 
 class GameContactListener final : public b2ContactListener {
@@ -127,6 +136,16 @@ public:
         if (bodyB == removalZone_) {
             queueRemoval(bodyA);
             return;
+        }
+        b2Fixture* fixtureA = contact->GetFixtureA();
+        b2Fixture* fixtureB = contact->GetFixtureB();
+        if (!fixtureA->IsSensor() && !fixtureB->IsSensor()) {
+            if (isBomb(bodyA)) {
+                queueExplosion(bodyA);
+            }
+            if (isBomb(bodyB)) {
+                queueExplosion(bodyB);
+            }
         }
         recordContact(contact);
     }
@@ -160,11 +179,11 @@ public:
         TowerBlock* blockA = findBlock(bodyA);
         TowerBlock* blockB = findBlock(bodyB);
 
-        if (blockA != nullptr && isCannonball(bodyB) &&
+        if (blockA != nullptr && isNormalCannonball(bodyB) &&
             getNormalImpulse(*impulse) >= kBlockBreakImpulse) {
             queueRemoval(bodyA);
         }
-        if (blockB != nullptr && isCannonball(bodyA) &&
+        if (blockB != nullptr && isNormalCannonball(bodyA) &&
             getNormalImpulse(*impulse) >= kBlockBreakImpulse) {
             queueRemoval(bodyB);
         }
@@ -200,6 +219,30 @@ public:
         return scoreChanged;
     }
 
+    bool processPendingExplosions() {
+        bool scoreChanged = false;
+        for (const auto& explosion : pendingExplosions_) {
+            for (TowerBlock& block : towerBlocks_) {
+                const b2Vec2 offset = block.body->GetPosition() - explosion.second;
+                const float distance = offset.Length();
+                if (distance >= kBombBlastRadius) {
+                    continue;
+                }
+
+                const b2Vec2 direction =
+                    distance > b2_epsilon ? (1.0f / distance) * offset : b2Vec2(0.0f, 1.0f);
+                const float impulseMagnitude =
+                    kBombMaxImpulse * (1.0f - distance / kBombBlastRadius);
+                block.body->ApplyLinearImpulseToCenter(impulseMagnitude * direction, true);
+
+                bool progress = false;
+                scoreChanged |= markKnocked(block, progress);
+            }
+        }
+        pendingExplosions_.clear();
+        return scoreChanged;
+    }
+
     std::vector<b2Body*> takePendingRemovals() {
         std::vector<b2Body*> removals;
         removals.swap(pendingRemovals_);
@@ -208,6 +251,7 @@ public:
 
     void clearPendingEvents() {
         pendingContacts_.clear();
+        pendingExplosions_.clear();
         pendingRemovals_.clear();
     }
 
@@ -225,6 +269,16 @@ private:
             std::find(pendingRemovals_.begin(), pendingRemovals_.end(), body) ==
                 pendingRemovals_.end()) {
             pendingRemovals_.push_back(body);
+        }
+    }
+
+    void queueExplosion(b2Body* bomb) {
+        const auto existing = std::find_if(
+            pendingExplosions_.begin(), pendingExplosions_.end(),
+            [bomb](const auto& explosion) { return explosion.first == bomb; });
+        if (existing == pendingExplosions_.end()) {
+            pendingExplosions_.emplace_back(bomb, bomb->GetPosition());
+            queueRemoval(bomb);
         }
     }
 
@@ -246,6 +300,18 @@ private:
         return std::find(cannonballs_.begin(), cannonballs_.end(), body) != cannonballs_.end();
     }
 
+    bool isNormalCannonball(const b2Body* body) const {
+        const b2Fixture* fixture = body->GetFixtureList();
+        return isCannonball(body) && fixture != nullptr &&
+               fixture->GetFilterData().categoryBits == kNormalBallCategory;
+    }
+
+    bool isBomb(const b2Body* body) const {
+        const b2Fixture* fixture = body->GetFixtureList();
+        return isCannonball(body) && fixture != nullptr &&
+               fixture->GetFilterData().categoryBits == kBombCategory;
+    }
+
     bool markKnocked(TowerBlock& block, bool& progress) {
         if (block.knocked) {
             return false;
@@ -261,6 +327,7 @@ private:
     const std::vector<b2Body*>& cannonballs_;
     int& knockedCount_;
     std::vector<std::pair<b2Body*, b2Body*>> pendingContacts_;
+    std::vector<std::pair<b2Body*, b2Vec2>> pendingExplosions_;
     std::vector<b2Body*> pendingRemovals_;
 };
 
@@ -599,12 +666,14 @@ int main() {
         bool rWasDown = false;
         bool wasKey1Down = false;
         bool wasKey2Down = false;
+        bool wasKey3Down = false;
 
         while (!window.shouldClose()) {
             gfx::processInput(window);
             bool ammoChanged = false;
             const bool key1Down = window.isKeyPressed(GLFW_KEY_1);
             const bool key2Down = window.isKeyPressed(GLFW_KEY_2);
+            const bool key3Down = window.isKeyPressed(GLFW_KEY_3);
             if (key1Down && !wasKey1Down && selectedAmmo != AmmoType::normal) {
                 selectedAmmo = AmmoType::normal;
                 ammoChanged = true;
@@ -613,8 +682,13 @@ int main() {
                 selectedAmmo = AmmoType::ghost;
                 ammoChanged = true;
             }
+            if (key3Down && !wasKey3Down && selectedAmmo != AmmoType::bomb) {
+                selectedAmmo = AmmoType::bomb;
+                ammoChanged = true;
+            }
             wasKey1Down = key1Down;
             wasKey2Down = key2Down;
+            wasKey3Down = key3Down;
 
             const bool rDown = window.isKeyPressed(GLFW_KEY_R);
             const bool resetPressed = rDown && !rWasDown;
@@ -664,6 +738,8 @@ int main() {
                 world.Step(kStepDt, 8, 3);
                 knockedCountChanged =
                     contactListener.processPendingContacts() || knockedCountChanged;
+                knockedCountChanged =
+                    contactListener.processPendingExplosions() || knockedCountChanged;
                 for (b2Body* body : contactListener.takePendingRemovals()) {
                     world.DestroyBody(body);
                     towerBlocks.erase(
